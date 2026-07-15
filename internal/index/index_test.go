@@ -234,7 +234,7 @@ func TestDocsCopy(t *testing.T) {
 
 	// Mutate the returned slice.
 	original[0].Title = "MUTATED"
-	original = append(original, original[0])
+	_ = append(original, original[0]) // exercise append; result unused — we test len via fresh call below
 
 	// The index must be unaffected.
 	fresh := idx.Docs()
