@@ -1,0 +1,33 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["stable"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: go mod tidy check
+        run: go mod tidy && git diff --exit-code -- go.sum
+
+      - name: Test
+        run: go test -race -shuffle=on ./...
+
+      - name: Vet
+        run: go vet ./...

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>nrkno/nrk-bot-configs//plattform/utvikleropplevelse/renovate/renovate"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "rebaseWhen": "behind-base-branch"
+}
