@@ -1,0 +1,60 @@
+name: "Create release"
+
+on:
+  push:
+    branches:
+      - "main"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@9b92529c6154dd7c319bafe9e4dcb56568259d1a # v5.1.0
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    with:
+      runs-on: nrk-azure-intern
+      release-enabled: true
+      lint-enabled: true
+
+  go-releaser:
+    runs-on: nrk-azure-intern
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dispatcher-outputs:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    runs-on: nrk-azure-intern
+    steps:
+      - run: |
+          echo "DISPATCHER_OUTPUT:tag=${{ needs.release.outputs.tag }}"
