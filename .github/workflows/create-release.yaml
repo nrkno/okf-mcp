@@ -24,12 +24,12 @@ jobs:
       pull-requests: write
       id-token: write
     with:
-      runs-on: nrk-azure-intern
+      runs-on: ubuntu-latest
       release-enabled: true
       lint-enabled: true
 
   go-releaser:
-    runs-on: nrk-azure-intern
+    runs-on: ubuntu-latest
     needs: release
     if: ${{ needs.release.outputs.released == 'true' }}
     permissions:
@@ -54,7 +54,7 @@ jobs:
   dispatcher-outputs:
     needs: release
     if: ${{ needs.release.outputs.released == 'true' }}
-    runs-on: nrk-azure-intern
+    runs-on: ubuntu-latest
     steps:
       - run: |
           echo "DISPATCHER_OUTPUT:tag=${{ needs.release.outputs.tag }}"
