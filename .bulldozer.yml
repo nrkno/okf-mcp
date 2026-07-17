@@ -1,2 +1,28 @@
+---
+## Bulldozer configuration file
+# The following labels should be added to the repository for this configuration to work optiomally:
+# - `do-not-merge`, `ignore`: This label is used to prevent the PR from being merged
+version: 1
+
 merge:
+  ignore:
+    comment_substrings: 
+      - "Do not merge"
+      - "==DO_NOT_MERGE=="
+    labels: 
+      - "do-not-merge"
+    pr_body_substrings: 
+      - "Do not merge"
+      - "==DO_NOT_MERGE=="
+
   method: squash
+  allow_merge_with_no_checks: false
+  delete_after_merge: true
+  required_statuses:
+    - 'policy-bot: main'
+
+update:
+  ignore:
+    labels:
+      - "bulldozer-do-not-update"
+  ignore_drafts: true
