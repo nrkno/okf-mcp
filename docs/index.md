@@ -5,4 +5,5 @@
 * [OKF Standard](/docs/okf-standard.md) - The Open Knowledge Format v0.1 frontmatter schema, type vocabulary, and authoring conventions.
 * [Deployment](/docs/deployment.md) - Build, install, run, test, and release procedures.
 * [MCP Tools Reference](/docs/tools.md) - Complete reference for the three MCP tools: list_tags, list_docs, and get_doc.
+* [Troubleshooting](/docs/troubleshooting.md) - Common issues and solutions for empty indexes, missing documents, frontmatter warnings, and setup problems.
 * [Log](/docs/log.md) - Documentation change log.

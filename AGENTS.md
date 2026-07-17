@@ -114,3 +114,4 @@ These docs are served by the `okf-mcp` server itself when running in this repo â
 | `docs/configuration.md` | MCP client setup, permission strings, opencode/Claude examples        |
 | `docs/okf-standard.md`  | OKF frontmatter schema, type vocabulary, conventions                  |
 | `docs/deployment.md`    | Build, install, release binaries                                      |
+| `docs/log.md`           | Chronological record of changes to docs/ files                        |
