@@ -109,7 +109,7 @@ Files are indexed only when they have valid YAML frontmatter with a `type` field
 
 ```yaml
 ---
-type: guide
+type: Playbook
 title: Authentication Setup
 description: How to configure OAuth2 for internal services
 tags:
@@ -190,7 +190,7 @@ Finds the best-matching document for a topic query and returns its full content 
 
 ```json
 {
-  "content": "---\ntype: guide\n...\n---\n# User Guide\n...",
+  "content": "# User Guide\n...",
   "file_path": "docs/guide.md",
   "tags": ["api", "setup"],
   "title": "User Guide",

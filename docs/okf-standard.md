@@ -3,7 +3,7 @@ type: Architecture
 title: OKF Standard
 description: The Open Knowledge Format v0.1 frontmatter schema, type vocabulary, skip rules, and authoring conventions as implemented by okf-mcp.
 tags: [okf, frontmatter, standard, conventions, index, log]
-timestamp: 2026-07-15T00:00:00Z
+timestamp: 2026-07-16T00:00:00Z
 ---
 
 # OKF Standard
@@ -48,6 +48,8 @@ NRK Plattform uses these six `type` values:
 | `API Reference` | Tool parameters, response shapes, error codes, endpoint contracts |
 | `Metrics Reference` | Metric names, labels, alert thresholds, SLO definitions |
 | `Log` | Reserved for `log.md` — the documentation change log |
+
+**Note:** `Metrics Reference` is intended for services that expose structured numeric metrics (e.g. Prometheus, OpenTelemetry). okf-mcp does not expose metrics, so no example of this type exists in this repository.
 
 okf-mcp does not enforce or validate the `type` value; any non-empty string passes the indexing gate. The vocabulary above is a convention, not a filter.
 
