@@ -1,20 +1,26 @@
-name: "Commit lint"
+name: commitlint
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   commitlint:
-    name: commitlint
-    uses: nrkno/github-workflow-semantic-release/.github/workflows/workflow.yaml@9b92529c6154dd7c319bafe9e4dcb56568259d1a # v5.1.0
-    permissions:
-      contents: read
-    with:
-      runs-on: ubuntu-latest
-      release-enabled: false
-      lint-enabled: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: "lts/*"
+
+      - name: Install commitlint
+        run: npm install --no-save commitlint @commitlint/config-conventional
+
+      - name: Validate PR commits with commitlint
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
