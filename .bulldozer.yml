@@ -1,2 +1,4 @@
 merge:
   method: squash
+  required_checks:
+    - "policy-bot: main"
