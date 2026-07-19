@@ -1,9 +1,9 @@
 ---
 type: Playbook
 title: Deployment
-description: How to build, install, run, test, and release okf-mcp — from local development to production binaries.
-tags: [deployment, build, release, go, binary, install]
-timestamp: 2026-07-15T00:00:00Z
+description: How to build, install, run, test, validate, and release okf-mcp — from local development to production binaries.
+tags: [deployment, build, release, go, binary, install, validate, pre-commit]
+timestamp: 2026-07-18T00:00:00Z
 ---
 
 # Deployment
@@ -64,6 +64,35 @@ okf-mcp: serving /path/to/your/repo
 ```
 
 In practice, the MCP host (opencode, Claude Desktop) starts `okf-mcp` as a subprocess and manages its lifecycle. The working directory is controlled by the host configuration — see [Configuration](/docs/configuration.md) for how to set it correctly.
+
+## Validating docs (`--validate`)
+
+`okf-mcp` can validate OKF-conformant documents without starting the MCP server. Use the `--validate` flag:
+
+```sh
+okf-mcp --validate              # validate the current working directory
+okf-mcp --validate --path docs/ # validate a specific path
+```
+
+The binary reads all `.md` files, checks frontmatter conformance, and prints findings to stderr. It exits before starting the MCP server.
+
+### Exit codes
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | All files conformant (zero errors, may have warnings) |
+| 1 | One or more errors found |
+| 2 | Infrastructure failure (bad path, scan error) |
+
+### Pre-commit hook
+
+A pre-commit hook is included at `.githooks/pre-commit` that validates the entire bundle before each commit. Install it with:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The hook requires `okf-mcp` to be on your `$PATH`. If the binary is not found, the hook prints an installation reminder and exits with code 1. If validation finds errors, the commit is blocked (exit 1). Warnings do not block the commit.
 
 ## Development
 

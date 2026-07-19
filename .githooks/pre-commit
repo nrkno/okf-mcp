@@ -1,0 +1,12 @@
+#!/bin/sh
+# .githooks/pre-commit — validate OKF docs before commit
+# Install: git config core.hooksPath .githooks
+
+if ! command -v okf-mcp >/dev/null 2>&1; then
+    echo "okf-mcp: pre-commit hook requires okf-mcp on PATH" >&2
+    echo "Install: see README.md#installation" >&2
+    exit 1
+fi
+
+okf-mcp --validate
+exit $?

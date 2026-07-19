@@ -331,3 +331,93 @@ func TestParse_NoPanicOnMalformedFile(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// DetectFrontmatter tests
+// ---------------------------------------------------------------------------
+
+func TestDetectFrontmatter_Valid(t *testing.T) {
+	t.Parallel()
+	content := "---\ntype: guide\ntitle: My Title\n---\n# Body\n"
+	info := DetectFrontmatter(content)
+	if !info.HasFrontmatter {
+		t.Fatal("expected HasFrontmatter=true, got false")
+	}
+	wantYAML := "type: guide\ntitle: My Title\n"
+	if info.YAMLBlock != wantYAML {
+		t.Errorf("YAMLBlock = %q, want %q", info.YAMLBlock, wantYAML)
+	}
+	// opening "---\n" (4) + YAML (26) + closing "---\n" (4) = 34
+	wantOffset := 4 + len(wantYAML) + 4
+	if info.BodyOffset != wantOffset {
+		t.Errorf("BodyOffset = %d, want %d", info.BodyOffset, wantOffset)
+	}
+	got := content[info.BodyOffset:]
+	if got != "# Body\n" {
+		t.Errorf("content[BodyOffset:] = %q, want %q", got, "# Body\n")
+	}
+}
+
+func TestDetectFrontmatter_MissingClosingDelimiter(t *testing.T) {
+	t.Parallel()
+	content := "---\ntype: guide\ntitle: My Title\n"
+	info := DetectFrontmatter(content)
+	if info.HasFrontmatter {
+		t.Fatal("expected HasFrontmatter=false for missing closing delimiter, got true")
+	}
+	if info.YAMLBlock != "" {
+		t.Errorf("YAMLBlock = %q, want empty", info.YAMLBlock)
+	}
+	if info.BodyOffset != 0 {
+		t.Errorf("BodyOffset = %d, want 0", info.BodyOffset)
+	}
+}
+
+func TestDetectFrontmatter_NoFrontmatter(t *testing.T) {
+	t.Parallel()
+	content := "# Just a heading\n\nNo frontmatter.\n"
+	info := DetectFrontmatter(content)
+	if info.HasFrontmatter {
+		t.Fatal("expected HasFrontmatter=false, got true")
+	}
+	if info.YAMLBlock != "" {
+		t.Errorf("YAMLBlock = %q, want empty", info.YAMLBlock)
+	}
+	if info.BodyOffset != 0 {
+		t.Errorf("BodyOffset = %d, want 0", info.BodyOffset)
+	}
+}
+
+func TestDetectFrontmatter_EmptyContent(t *testing.T) {
+	t.Parallel()
+	info := DetectFrontmatter("")
+	if info.HasFrontmatter {
+		t.Fatal("expected HasFrontmatter=false for empty content, got true")
+	}
+	if info.YAMLBlock != "" {
+		t.Errorf("YAMLBlock = %q, want empty", info.YAMLBlock)
+	}
+	if info.BodyOffset != 0 {
+		t.Errorf("BodyOffset = %d, want 0", info.BodyOffset)
+	}
+}
+
+func TestDetectFrontmatter_FrontmatterOnlyNoBody(t *testing.T) {
+	t.Parallel()
+	content := "---\ntype: guide\n---\n"
+	info := DetectFrontmatter(content)
+	if !info.HasFrontmatter {
+		t.Fatal("expected HasFrontmatter=true, got false")
+	}
+	wantYAML := "type: guide\n"
+	if info.YAMLBlock != wantYAML {
+		t.Errorf("YAMLBlock = %q, want %q", info.YAMLBlock, wantYAML)
+	}
+	if info.BodyOffset != len(content) {
+		t.Errorf("BodyOffset = %d, want %d (len of content with no body)", info.BodyOffset, len(content))
+	}
+	got := content[info.BodyOffset:]
+	if got != "" {
+		t.Errorf("content[BodyOffset:] = %q, want empty string", got)
+	}
+}

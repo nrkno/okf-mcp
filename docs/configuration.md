@@ -3,7 +3,7 @@ type: Configuration
 title: Configuration
 description: How to register okf-mcp in opencode, Claude Desktop, and other MCP hosts, including permission strings and auto-registration behaviour.
 tags: [configuration, mcp, opencode, claude, permissions, client-setup]
-timestamp: 2026-07-15T00:00:00Z
+timestamp: 2026-07-19T00:00:00Z
 ---
 
 # Configuration
@@ -26,7 +26,7 @@ This confirms which directory is being scanned. If the path is wrong, adjust the
 
 ## opencode
 
-Add a server entry to `opencode.json` and include all three tool names in the `permissions.allow` list:
+Add a server entry to `opencode.json` and include all six tool names in the `permissions.allow` list:
 
 ```json
 {
@@ -41,13 +41,16 @@ Add a server entry to `opencode.json` and include all three tool names in the `p
     "allow": [
       "mcp__okf-mcp__list_tags",
       "mcp__okf-mcp__list_docs",
-      "mcp__okf-mcp__get_doc"
+      "mcp__okf-mcp__get_doc",
+      "mcp__okf-mcp__validate_doc",
+      "mcp__okf-mcp__get_index",
+      "mcp__okf-mcp__get_log"
     ]
   }
 }
 ```
 
-The three permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
+The six permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
 
 ## Claude Desktop
 
@@ -74,6 +77,9 @@ The injected instructions tell the agent to:
 
 1. Call `list_tags` first to discover available topics and tags.
 2. Use `get_doc(topic)` to retrieve the relevant document.
-3. Prefer this server over reading files directly when looking for platform or process documentation.
+3. Use `validate_doc` to check document conformance.
+4. Use `get_index` to browse the documentation tree structure.
+5. Use `get_log` to access structured change log entries.
+6. Prefer these tools over reading files directly when looking for documentation.
 
 No AGENTS.md entry is needed. No additional configuration beyond the server registration and permissions above is required.

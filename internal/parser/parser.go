@@ -23,12 +23,41 @@ type Doc struct {
 	BodyOffset int
 }
 
+// FrontmatterInfo holds the result of frontmatter detection.
+type FrontmatterInfo struct {
+	HasFrontmatter bool
+	YAMLBlock      string // raw YAML between delimiters (empty if !HasFrontmatter)
+	BodyOffset     int    // byte offset of markdown body start
+}
+
 // frontmatter is the YAML structure we unmarshal into.
 type frontmatter struct {
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description"`
 	Type        string   `yaml:"type"`
 	Tags        []string `yaml:"tags"`
+}
+
+// DetectFrontmatter checks if content starts with "---\n" and has a closing
+// "---" delimiter. Single source of truth for frontmatter detection.
+func DetectFrontmatter(content string) FrontmatterInfo {
+	if !strings.HasPrefix(content, "---\n") {
+		return FrontmatterInfo{}
+	}
+	rest := content[len("---\n"):]
+	end := findClosingDelimiter(rest)
+	if end < 0 {
+		return FrontmatterInfo{}
+	}
+	bodyOffset := 4 + end + 4
+	if bodyOffset > len(content) {
+		bodyOffset = len(content)
+	}
+	return FrontmatterInfo{
+		HasFrontmatter: true,
+		YAMLBlock:      rest[:end],
+		BodyOffset:     bodyOffset,
+	}
 }
 
 // Parse reads the file at path, extracts YAML frontmatter, and returns a Doc.
@@ -46,23 +75,13 @@ func Parse(path string) (Doc, bool, error) {
 
 	content := string(data)
 
-	// File must begin with "---\n"
-	if !strings.HasPrefix(content, "---\n") {
+	fmInfo := DetectFrontmatter(content)
+	if !fmInfo.HasFrontmatter {
 		return Doc{}, false, nil
 	}
-
-	// Find the closing "---" delimiter (a line that is exactly "---")
-	rest := content[len("---\n"):]
-	end := findClosingDelimiter(rest)
-	if end < 0 {
-		// No closing delimiter — treat entire remainder as body, no frontmatter
-		return Doc{}, false, nil
-	}
-
-	yamlBlock := rest[:end]
 
 	var fm frontmatter
-	if err := yaml.Unmarshal([]byte(yamlBlock), &fm); err != nil {
+	if err := yaml.Unmarshal([]byte(fmInfo.YAMLBlock), &fm); err != nil {
 		return Doc{}, false, err
 	}
 
@@ -71,21 +90,13 @@ func Parse(path string) (Doc, bool, error) {
 		return Doc{}, false, nil
 	}
 
-	// BodyOffset: opening "---\n" (4 bytes) + yaml block + closing "---\n" (4 bytes).
-	// Clamp to len(content) so that a file with no newline after the closing "---"
-	// (or no body at all) slices to "" rather than panicking.
-	bodyOffset := 4 + end + 4
-	if bodyOffset > len(content) {
-		bodyOffset = len(content)
-	}
-
 	doc := Doc{
 		Title:       fm.Title,
 		Description: fm.Description,
 		Type:        fm.Type,
 		Tags:        fm.Tags,
 		FilePath:    path,
-		BodyOffset:  bodyOffset,
+		BodyOffset:  fmInfo.BodyOffset,
 	}
 
 	if fm.Title == "" {

@@ -3,10 +3,24 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf]
-timestamp: 2026-07-16T00:00:00Z
+timestamp: 2026-07-18T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-07-19
+
+**Update**: `cmd/okf-mcp/main.go` — `WithInstructions` string now mentions all six tools (added `validate_doc`, `get_index`, `get_log`), not just `list_tags` and `get_doc`.
+**Update**: `docs/configuration.md` — auto-registration section lists all six tools in the injected instructions.
+**Update**: `docs/architecture.md` — `WithInstructions` auto-registration section mentions all six tools.
+
+## 2026-07-18
+
+**Creation**: `validate_doc` MCP tool — validates OKF-conformant documents with error/warning/notification findings (E0–E3, W1–W4, N1).
+**Creation**: `get_index` MCP tool — returns the bundle tree showing all documents and their directory structure.
+**Creation**: `get_log` MCP tool — returns structured log entries from the documentation change log with date/action/target filters.
+**Creation**: `--validate` CLI flag — validates OKF docs and exits with code 0/1/2 without starting the MCP server.
+**Creation**: pre-commit hook — `.githooks/pre-commit` validates the entire bundle before each commit.
 
 ## 2026-07-16
 
