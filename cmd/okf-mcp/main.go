@@ -28,10 +28,10 @@ var idx *index.Index
 // NEVER reconstruct mcp.NewTool inline inside main() — always use these vars.
 var (
 	listTagsTool = mcp.NewTool("list_tags",
-		mcp.WithDescription("List all tags across all indexed OKF documents"),
+		mcp.WithDescription("List all tags across all indexed documents"),
 	)
 	listDocsTool = mcp.NewTool("list_docs",
-		mcp.WithDescription("List all indexed OKF documents with their metadata (no content)"),
+		mcp.WithDescription("List all indexed documents with their metadata (no content)"),
 	)
 	getDocTool = mcp.NewTool("get_doc",
 		mcp.WithDescription("Retrieve a document by topic and optional tag filter"),
@@ -48,14 +48,14 @@ var (
 	)
 )
 
-// validateDocTool validates OKF-conformant documents.
+// validateDocTool validates document conformance.
 var validateDocTool = mcp.NewTool("validate_doc",
-	mcp.WithDescription("Validate OKF-conformant documents and report errors, warnings, and notifications"),
+	mcp.WithDescription("Validate document conformance and report errors, warnings, and notifications"),
 	mcp.WithString("file_path",
 		mcp.Description("Optional: relative path of a single file to validate. If omitted, validates entire bundle."),
 	),
 	mcp.WithArray("known_types",
-		mcp.Description("Optional: list of known OKF type values for W3 warnings"),
+		mcp.Description("Optional: list of known type values for W3 warnings"),
 	),
 )
 
@@ -165,7 +165,7 @@ func getDocHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 	if !found {
 		if len(idx.Docs()) == 0 {
 			return mcp.NewToolResultError(
-				"index is empty: no OKF-conformant markdown docs found in cwd",
+				"index is empty: no markdown documents found in cwd",
 			), nil
 		}
 		return mcp.NewToolResultError(
@@ -481,7 +481,7 @@ func sortLogEntries(entries []logparser.LogEntry) {
 }
 
 func main() {
-	validateFlag := flag.Bool("validate", false, "Validate OKF docs and exit (no MCP server)")
+	validateFlag := flag.Bool("validate", false, "Validate document conformance and exit (no MCP server)")
 	validatePath := flag.String("path", ".", "Path to validate (relative to cwd)")
 	flag.Parse()
 

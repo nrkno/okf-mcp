@@ -1,4 +1,4 @@
-// Package logparser parses OKF log.md bodies into structured LogEntry slices.
+// Package logparser parses log.md bodies into structured LogEntry slices.
 package logparser
 
 import (

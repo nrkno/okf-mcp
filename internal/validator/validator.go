@@ -1,4 +1,4 @@
-// Package validator checks OKF markdown files for frontmatter conformance.
+// Package validator checks markdown files for frontmatter conformance.
 package validator
 
 import (
