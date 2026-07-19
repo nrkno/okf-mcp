@@ -4,7 +4,7 @@ An MCP server that makes OKF-conformant documentation queryable by agents.
 
 ## Overview
 
-`okf-mcp` runs as a stdio MCP server alongside your existing MCP host. On every tool call it scans the working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves three tools so agents can look up docs without traversing the file tree themselves.
+`okf-mcp` runs as a stdio MCP server alongside your existing MCP host. On every tool call it scans the working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves six tools (list_tags, list_docs, get_doc, validate_doc, get_index, get_log) so agents can look up docs without traversing the file tree themselves.
 
 The index is rebuilt on each call, so newly added or updated files are always reflected. No config file, no database, no file watcher — just the files in the repo and their frontmatter.
 
@@ -23,6 +23,18 @@ Or install directly:
 ```sh
 go install github.com/nrkno/plattform-okf-mcp/cmd/okf-mcp@latest
 ```
+
+## Pre-commit hook
+
+A git pre-commit hook is included in `.githooks/pre-commit`. It validates all OKF docs on every commit, catching frontmatter and structure errors before they land.
+
+Install the hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The hook requires `okf-mcp` to be on `PATH` (see [Installation](#installation) above). If `okf-mcp` is not found, the commit is blocked with an installation hint.
 
 ## Usage
 

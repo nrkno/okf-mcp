@@ -176,6 +176,138 @@ func TestScan_NonMdFilesSkipped(t *testing.T) {
 	}
 }
 
+// sortedScanAll calls scanner.ScanAll and returns sorted Docs and Reserved slices.
+func sortedScanAll(t *testing.T, dir string) (docs, reserved []string) {
+	t.Helper()
+	result, err := scanner.ScanAll(dir)
+	if err != nil {
+		t.Fatalf("ScanAll(%s): unexpected error: %v", dir, err)
+	}
+	docs = append([]string(nil), result.Docs...)
+	reserved = append([]string(nil), result.Reserved...)
+	sort.Strings(docs)
+	sort.Strings(reserved)
+	return docs, reserved
+}
+
+// TestScanAll_ReservedAtRoot verifies that index.md and log.md at the root
+// appear in Reserved, not in Docs.
+func TestScanAll_ReservedAtRoot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.md"), "# Index\n")
+	writeFile(t, filepath.Join(dir, "log.md"), "# Log\n")
+	writeFile(t, filepath.Join(dir, "guide.md"), "# Guide\n")
+
+	docs, reserved := sortedScanAll(t, dir)
+
+	sort.Strings(reserved)
+	wantReserved := []string{
+		filepath.Join(dir, "index.md"),
+		filepath.Join(dir, "log.md"),
+	}
+	sort.Strings(wantReserved)
+
+	if len(docs) != 1 || filepath.Base(docs[0]) != "guide.md" {
+		t.Errorf("Docs = %v, want [guide.md]", docs)
+	}
+	if len(reserved) != len(wantReserved) {
+		t.Fatalf("Reserved = %v, want %v", reserved, wantReserved)
+	}
+	for i := range reserved {
+		if reserved[i] != wantReserved[i] {
+			t.Errorf("Reserved[%d] = %s, want %s", i, reserved[i], wantReserved[i])
+		}
+	}
+}
+
+// TestScanAll_ReservedInNestedDirs verifies that reserved files in nested
+// directories are collected into Reserved.
+func TestScanAll_ReservedInNestedDirs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "sub", "index.md"), "# Sub Index\n")
+	writeFile(t, filepath.Join(dir, "deep", "log.md"), "# Deep Log\n")
+	writeFile(t, filepath.Join(dir, "sub", "guide.md"), "# Guide\n")
+	writeFile(t, filepath.Join(dir, "deep", "other.md"), "# Other\n")
+
+	docs, reserved := sortedScanAll(t, dir)
+
+	wantDocs := []string{
+		filepath.Join(dir, "deep", "other.md"),
+		filepath.Join(dir, "sub", "guide.md"),
+	}
+	wantReserved := []string{
+		filepath.Join(dir, "deep", "log.md"),
+		filepath.Join(dir, "sub", "index.md"),
+	}
+	sort.Strings(wantDocs)
+	sort.Strings(wantReserved)
+
+	if len(docs) != len(wantDocs) {
+		t.Fatalf("Docs = %v, want %v", docs, wantDocs)
+	}
+	for i := range docs {
+		if docs[i] != wantDocs[i] {
+			t.Errorf("Docs[%d] = %s, want %s", i, docs[i], wantDocs[i])
+		}
+	}
+	if len(reserved) != len(wantReserved) {
+		t.Fatalf("Reserved = %v, want %v", reserved, wantReserved)
+	}
+	for i := range reserved {
+		if reserved[i] != wantReserved[i] {
+			t.Errorf("Reserved[%d] = %s, want %s", i, reserved[i], wantReserved[i])
+		}
+	}
+}
+
+// TestScanAll_NoReservedFiles verifies that ScanAll returns an empty Reserved
+// slice when no reserved files exist.
+func TestScanAll_NoReservedFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "guide.md"), "# Guide\n")
+	writeFile(t, filepath.Join(dir, "sub", "intro.md"), "# Intro\n")
+
+	docs, reserved := sortedScanAll(t, dir)
+
+	wantDocs := []string{
+		filepath.Join(dir, "guide.md"),
+		filepath.Join(dir, "sub", "intro.md"),
+	}
+	sort.Strings(wantDocs)
+
+	if len(docs) != len(wantDocs) {
+		t.Fatalf("Docs = %v, want %v", docs, wantDocs)
+	}
+	for i := range docs {
+		if docs[i] != wantDocs[i] {
+			t.Errorf("Docs[%d] = %s, want %s", i, docs[i], wantDocs[i])
+		}
+	}
+	if len(reserved) != 0 {
+		t.Errorf("Reserved = %v, want empty slice", reserved)
+	}
+}
+
+// TestScanAll_EmptyDir verifies that ScanAll returns empty slices for an empty dir.
+func TestScanAll_EmptyDir(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	result, err := scanner.ScanAll(dir)
+	if err != nil {
+		t.Fatalf("ScanAll(%s): unexpected error: %v", dir, err)
+	}
+	if len(result.Docs) != 0 {
+		t.Errorf("Docs = %v, want empty slice", result.Docs)
+	}
+	if len(result.Reserved) != 0 {
+		t.Errorf("Reserved = %v, want empty slice", result.Reserved)
+	}
+}
+
 // TestScan_Mixed verifies combined behaviour: valid .md returned; reserved
 // filenames, hidden dirs, and non-.md files excluded.
 func TestScan_Mixed(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
+	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
+	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
 
 // ---------------------------------------------------------------------------
@@ -81,7 +84,7 @@ func setupFixtureDir(t *testing.T) string {
 // It mutates the package-level idx variable and restores it via t.Cleanup.
 //
 // newFixtureServer sets idx to a new index rooted at dir, registers a
-// t.Cleanup to restore it, then starts an mcptest.Server with all three
+// t.Cleanup to restore it, then starts an mcptest.Server with all six
 // production tools. The caller must defer srv.Close().
 func newFixtureServer(t *testing.T, dir string) *mcptest.Server {
 	t.Helper()
@@ -94,6 +97,9 @@ func newFixtureServer(t *testing.T, dir string) *mcptest.Server {
 		server.ServerTool{Tool: listTagsTool, Handler: listTagsHandler},
 		server.ServerTool{Tool: listDocsTool, Handler: listDocsHandler},
 		server.ServerTool{Tool: getDocTool, Handler: getDocHandler},
+		server.ServerTool{Tool: validateDocTool, Handler: validateDocHandler},
+		server.ServerTool{Tool: getIndexTool, Handler: getIndexHandler},
+		server.ServerTool{Tool: getLogTool, Handler: getLogHandler},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -326,6 +332,9 @@ func TestGetDoc_EmptyIndex(t *testing.T) {
 		server.ServerTool{Tool: listTagsTool, Handler: listTagsHandler},
 		server.ServerTool{Tool: listDocsTool, Handler: listDocsHandler},
 		server.ServerTool{Tool: getDocTool, Handler: getDocHandler},
+		server.ServerTool{Tool: validateDocTool, Handler: validateDocHandler},
+		server.ServerTool{Tool: getIndexTool, Handler: getIndexHandler},
+		server.ServerTool{Tool: getLogTool, Handler: getLogHandler},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -380,6 +389,9 @@ func TestGetDoc_TagsAsString(t *testing.T) {
 
 	srv, err := mcptest.NewServer(t,
 		server.ServerTool{Tool: getDocTool, Handler: getDocHandler},
+		server.ServerTool{Tool: validateDocTool, Handler: validateDocHandler},
+		server.ServerTool{Tool: getIndexTool, Handler: getIndexHandler},
+		server.ServerTool{Tool: getLogTool, Handler: getLogHandler},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -477,5 +489,417 @@ func TestGetDoc_LiveRead(t *testing.T) {
 	// I-2 (body): content must equal the body portion only (what follows the closing "---\n").
 	if got != wantBody {
 		t.Errorf("I-2 violation: content = %q, want body %q", got, wantBody)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tool count
+// ---------------------------------------------------------------------------
+
+// TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
+func TestNewFixtureServerToolsCount(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	tools, err := srv.Client().ListTools(context.Background(), mcp.ListToolsRequest{})
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+
+	wantNames := map[string]bool{
+		"list_tags": true, "list_docs": true, "get_doc": true,
+		"validate_doc": true, "get_index": true, "get_log": true,
+	}
+	if len(tools.Tools) != len(wantNames) {
+		t.Fatalf("got %d tools, want %d", len(tools.Tools), len(wantNames))
+	}
+	for _, tool := range tools.Tools {
+		if !wantNames[tool.Name] {
+			t.Errorf("unexpected tool: %s", tool.Name)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validate_doc tests
+// ---------------------------------------------------------------------------
+
+func TestValidateDoc_BundleValid(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "validate_doc", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Summary  validator.Summary `json:"summary"`
+		Findings []struct{}        `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Summary.Files == 0 {
+		t.Errorf("expected Files > 0, got 0")
+	}
+}
+
+func TestValidateDoc_BundleInvalid(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "validate_doc", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Summary validator.Summary `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Fixture has notype.md (E2) and nofront.md (E1) — expect errors.
+	if resp.Summary.Errors == 0 {
+		t.Errorf("expected errors for invalid fixture files")
+	}
+}
+
+func TestValidateDoc_SingleFileDoc(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "validate_doc", map[string]any{"file_path": "guide.md"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Summary validator.Summary `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Summary.Files != 1 {
+		t.Errorf("expected 1 file, got %d", resp.Summary.Files)
+	}
+	if resp.Summary.Errors > 0 {
+		t.Errorf("guide.md should be valid, got %d errors", resp.Summary.Errors)
+	}
+}
+
+func TestValidateDoc_SingleFileReserved(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "validate_doc", map[string]any{"file_path": "index.md"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Summary  validator.Summary `json:"summary"`
+		Findings []struct {
+			Code string `json:"code"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Summary.Files != 1 {
+		t.Errorf("expected 1 file, got %d", resp.Summary.Files)
+	}
+	// index.md fixture has frontmatter → E3.
+	found := false
+	for _, f := range resp.Findings {
+		if f.Code == "E3" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected E3 finding for index.md with frontmatter")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// get_index tests
+// ---------------------------------------------------------------------------
+
+func TestGetIndex_FullTree(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_index", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var tree index.TreeNode
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &tree); err != nil {
+		t.Fatalf("unmarshal tree: %v", err)
+	}
+	if tree.Type != "directory" {
+		t.Errorf("root type: got %q, want directory", tree.Type)
+	}
+	if len(tree.Children) == 0 {
+		t.Error("expected non-empty root children")
+	}
+}
+
+func TestGetIndex_Subtree(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_index", nil)
+	if result.IsError {
+		t.Fatalf("get_index failed: %s", getTextContent(t, result))
+	}
+	// The fixture has no subdirectories — all files are at root.
+	// Verify that requesting a non-existent subtree returns an error.
+	result = callTool(t, srv, "get_index", map[string]any{"path": "nonexistent"})
+	if !result.IsError {
+		t.Fatalf("expected error for nonexistent path, got success")
+	}
+}
+
+func TestGetIndex_RootPath(t *testing.T) {
+	dir := setupFixtureDir(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_index", map[string]any{"path": "."})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var tree index.TreeNode
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &tree); err != nil {
+		t.Fatalf("unmarshal tree: %v", err)
+	}
+	if tree.Type != "directory" {
+		t.Errorf("root type: got %q, want directory", tree.Type)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// get_log tests
+// ---------------------------------------------------------------------------
+
+// setupLogFixture creates a fixture with a log.md containing valid log entries.
+func setupLogFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	write("guide.md", frontmatter("guide", "User Guide", "A guide", []string{"api"}))
+
+	logContent := "---\ntype: Log\ntitle: Log\ndescription: Change log\ntags:\n  - log\n---\n" +
+		"## 2025-07-10\n\n**Update**: `[guide.md](/docs/guide.md)` — Revised section 2\n\n" +
+		"## 2025-06-15\n\n**Creation**: `[guide.md](/docs/guide.md)` — Initial creation\n"
+	write("log.md", logContent)
+
+	return dir
+}
+
+func TestGetLog_ValidEntries(t *testing.T) {
+	dir := setupLogFixture(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_log", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Entries []logparser.LogEntry `json:"entries"`
+		Source  string               `json:"source"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(resp.Entries))
+	}
+	// Newest first: 2025-07-10 should be before 2025-06-15.
+	if resp.Entries[0].Date != "2025-07-10" {
+		t.Errorf("entries[0].Date: got %q, want 2025-07-10", resp.Entries[0].Date)
+	}
+	if resp.Source == "" {
+		t.Error("expected non-empty source")
+	}
+}
+
+func TestGetLog_MissingLog(t *testing.T) {
+	// Fixture with no log.md.
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644)
+
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_log", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Entries []logparser.LogEntry `json:"entries"`
+		Note    string               `json:"note"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(resp.Entries))
+	}
+	if resp.Note != "no log.md found" {
+		t.Errorf("note: got %q, want %q", resp.Note, "no log.md found")
+	}
+}
+
+func TestGetLog_Filtered(t *testing.T) {
+	dir := setupLogFixture(t)
+	srv := newFixtureServer(t, dir)
+	defer srv.Close()
+
+	// Filter by action=Update.
+	result := callTool(t, srv, "get_log", map[string]any{"action": "Update"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Entries []logparser.LogEntry `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(resp.Entries))
+	}
+	if resp.Entries[0].Action != "Update" {
+		t.Errorf("action: got %q, want Update", resp.Entries[0].Action)
+	}
+
+	// Filter by since.
+	result = callTool(t, srv, "get_log", map[string]any{"since": "2025-07-01"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(resp.Entries))
+	}
+	if resp.Entries[0].Date != "2025-07-10" {
+		t.Errorf("date: got %q, want 2025-07-10", resp.Entries[0].Date)
+	}
+
+	// Filter by limit.
+	result = callTool(t, srv, "get_log", map[string]any{"limit": float64(1)})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(resp.Entries))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CLI --validate tests
+// ---------------------------------------------------------------------------
+
+func TestCLI_Validate_NoErrors(t *testing.T) {
+	dir := t.TempDir()
+	// Write a valid OKF doc.
+	os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "User Guide", "A guide", []string{"api"})), 0o644)
+
+	bin := buildBinary(t)
+	exit := runBinary(t, bin, dir, "--validate")
+	if exit != 0 {
+		t.Errorf("exit code: got %d, want 0", exit)
+	}
+}
+
+func TestCLI_Validate_WithErrors(t *testing.T) {
+	dir := t.TempDir()
+	// Write an index.md WITH frontmatter → E3 (index.md must not have frontmatter).
+	os.WriteFile(filepath.Join(dir, "index.md"),
+		[]byte("---\ntype: Index\ntitle: Index\ndescription: Index page\n---\n"), 0o644)
+
+	bin := buildBinary(t)
+	exit := runBinary(t, bin, dir, "--validate")
+	if exit != 1 {
+		t.Errorf("exit code: got %d, want 1", exit)
+	}
+}
+
+func TestCLI_Validate_WithPath(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	os.MkdirAll(docsDir, 0o755)
+	os.WriteFile(filepath.Join(docsDir, "guide.md"),
+		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644)
+
+	bin := buildBinary(t)
+	exit := runBinary(t, bin, dir, "--validate", "--path", "docs")
+	if exit != 0 {
+		t.Errorf("exit code: got %d, want 0", exit)
+	}
+}
+
+func buildBinary(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "okf-mcp")
+	cmd := exec.Command("go", "build", "-o", bin, ".")
+	cmd.Dir = filepath.Join(findModuleRoot(t), "cmd", "okf-mcp")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	return bin
+}
+
+func runBinary(t *testing.T, bin, workDir string, args ...string) int {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	cmd.Dir = workDir
+	cmd.Run()
+	return cmd.ProcessState.ExitCode()
+}
+
+func findModuleRoot(t *testing.T) string {
+	t.Helper()
+	wd, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			return wd
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			t.Fatal("could not find module root")
+		}
+		wd = parent
 	}
 }

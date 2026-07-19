@@ -1,3 +1,10 @@
+---
+type: design
+title: "Sub-Document Section Tagging: Evaluation"
+description: Evaluates whether tagged sections inside markdown files can improve retrieval precision for large multi-topic docs, concluding that document discipline is the better path.
+tags: [mcp, search, tagging, scoring, document-discipline]
+---
+
 # Sub-Document Section Tagging: Evaluation
 
 > Design evaluation — okf-mcp, 2026-07-15
@@ -22,13 +29,13 @@ and if so, which mechanism (mid-document YAML block vs HTML comment annotation).
 
 ## Invariants and Guarantees (relevant subset)
 
-| # | Invariant | Current owner | Status under section tagging |
-|---|-----------|--------------|------------------------------|
-| I-2 | content is a live disk read, not cached | getDocHandler | Preserved |
-| I-3 | type field required or file skipped | parser.Parse | Unchanged |
-| I-6 | tie-break alphabetical by file_path | matcher.FindBest | Must extend to sections |
-| NEW | section content is a contiguous slice of body | parser | Precondition: boundaries detected correctly |
-| NEW | returned section is best-scoring unit | matcher | Precondition: sections scored independently |
+| #   | Invariant                                     | Current owner    | Status under section tagging                |
+| --- | --------------------------------------------- | ---------------- | ------------------------------------------- |
+| I-2 | content is a live disk read, not cached       | getDocHandler    | Preserved                                   |
+| I-3 | type field required or file skipped           | parser.Parse     | Unchanged                                   |
+| I-6 | tie-break alphabetical by file_path           | matcher.FindBest | Must extend to sections                     |
+| NEW | section content is a contiguous slice of body | parser           | Precondition: boundaries detected correctly |
+| NEW | returned section is best-scoring unit         | matcher          | Precondition: sections scored independently |
 
 New failure mode: **false-section boundary** — parser detects a section start but
 misidentifies its end (nested `---` in a code fence; multiline comment). Returned
@@ -46,12 +53,15 @@ title: Full API Reference
 type: reference
 tags: [api, reference]
 ---
+
 ...intro...
 
 ---
-tags: [rate-limiting, api]
----
+
+## tags: [rate-limiting, api]
+
 ## Rate Limiting
+
 ...section content...
 ```
 
@@ -61,11 +71,13 @@ and section tags; matcher scores sections as independent units; `get_doc` respon
 `section_title` and `section_content` fields or overloads `content`.
 
 **Pros:**
+
 - `---` is syntactically unambiguous; easy to split on.
 - YAML is already parsed by the server — no new parser technology.
 - Mirrors the frontmatter convention authors already know.
 
 **Cons:**
+
 - **`---` mid-document IS a `<hr>` in CommonMark.** GitHub and every standard renderer
   display a horizontal rule at every section boundary. The document looks visually broken.
 - Tags-only sections have weak scoring signal. File-level title (3×) will almost always
@@ -84,7 +96,9 @@ An HTML comment before a heading carries the section's tags.
 
 ```markdown
 <!-- tags: [rate-limiting, api] -->
+
 ## Rate Limiting
+
 ...section content...
 ```
 
@@ -93,11 +107,13 @@ each annotated heading becomes a section sub-unit; section content is the slice 
 heading to next annotated heading or EOF; matcher scores sections independently.
 
 **Pros:**
+
 - HTML comments are invisible in rendered markdown — document reads cleanly on GitHub.
 - Convention is recognisable to MDX/Docusaurus users.
 - Does not collide with existing markdown syntax.
 
 **Cons:**
+
 - Parsing is fragile: must be single-line, exact whitespace, not inside code fence or
   blockquote. The parser must handle all these cases or produce false boundaries.
 - Tags alone give weak scoring signal — same problem as Option 1. The section scorer
@@ -123,6 +139,7 @@ docs/api-reference.md          (500 lines, 10 endpoints)
 ```
 
 **Pros:**
+
 - Extends the existing design principle cleanly: "frontmatter quality is a functional
   requirement." Discipline applies at authorship time, not retrieval time.
 - Each focused file gets full scoring signal: title (3×), tags (2×), description (1×).
@@ -132,6 +149,7 @@ docs/api-reference.md          (500 lines, 10 endpoints)
 - Cross-references between files are explicit links, not implicit section boundaries.
 
 **Cons:**
+
 - Requires corpus authors to restructure existing large files. One-time migration cost.
 - Does not help for genuinely indivisible large files (rare for OKF documentation).
 
@@ -197,6 +215,7 @@ That is the opposite of the design principle "simple, tested, well-understood."
 ### When to revisit
 
 Revisit Option 2 or Option 4 ONLY when BOTH of these conditions hold:
+
 - The corpus contains large files that CANNOT be split (generated or externally owned),
   AND agents are visibly returning wrong or over-large content for those files specifically.
 
@@ -205,14 +224,14 @@ This is an observed-pain trigger, identical in spirit to the Option D trigger in
 
 ## Input/Operation Coverage
 
-| Input shape | list_tags | list_docs | get_doc now | get_doc after discipline |
-|-------------|-----------|-----------|-------------|--------------------------|
-| Focused file ≤200 lines | handled | handled | handled | handled |
-| Large file 200–500 lines (splittable) | handled | handled | over-provisioned | handled |
-| Large file 500+ lines (splittable) | handled | handled | over-provisioned | handled |
-| Genuinely indivisible large file | handled | handled | over-provisioned | over-provisioned (deferred) |
-| Section-tagged file (Option 2) | n/a | n/a | n/a | out-of-scope |
-| Non-OKF file (no frontmatter) | out-of-scope | out-of-scope | out-of-scope | out-of-scope |
+| Input shape                           | list_tags    | list_docs    | get_doc now      | get_doc after discipline    |
+| ------------------------------------- | ------------ | ------------ | ---------------- | --------------------------- |
+| Focused file ≤200 lines               | handled      | handled      | handled          | handled                     |
+| Large file 200–500 lines (splittable) | handled      | handled      | over-provisioned | handled                     |
+| Large file 500+ lines (splittable)    | handled      | handled      | over-provisioned | handled                     |
+| Genuinely indivisible large file      | handled      | handled      | over-provisioned | over-provisioned (deferred) |
+| Section-tagged file (Option 2)        | n/a          | n/a          | n/a              | out-of-scope                |
+| Non-OKF file (no frontmatter)         | out-of-scope | out-of-scope | out-of-scope     | out-of-scope                |
 
 The "over-provisioned / deferred" cell (genuinely indivisible large file) is not a
 blocking gap — it is an accepted residual. Option 4 can address it if it materialises.
@@ -257,9 +276,13 @@ validation. Not applicable since Option 2 is not recommended.
 
 ## Deferred / Excluded — and the Guarantee Each Breaks
 
-| Exclusion | Guarantee weakened | Acceptable? |
-|-----------|--------------------|-------------|
-| Option 1 excluded | None — section tagging is not a current invariant | Yes — rendering breakage disqualifies |
-| Option 2 not built | None — same | Yes — revisit on observed pain with genuinely indivisible large files |
-| Option 4 deferred | Agent cannot retrieve sub-section of a large indivisible file | Yes — no such file in corpus yet |
+| Exclusion              | Guarantee weakened                                                       | Acceptable?                                                                |
+| ---------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Option 1 excluded      | None — section tagging is not a current invariant                        | Yes — rendering breakage disqualifies                                      |
+| Option 2 not built     | None — same                                                              | Yes — revisit on observed pain with genuinely indivisible large files      |
+| Option 4 deferred      | Agent cannot retrieve sub-section of a large indivisible file            | Yes — no such file in corpus yet                                           |
 | Section scoring signal | Section-level precision not achievable without full metadata per section | Accepted — focused files deliver equal precision at zero server complexity |
+
+## Log
+
+- 2026-07-17: Added OKF frontmatter and Log section (initial architecture decision record).

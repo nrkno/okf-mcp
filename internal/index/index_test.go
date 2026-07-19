@@ -7,6 +7,18 @@ import (
 	"testing"
 )
 
+// writeReserved writes a reserved file (index.md or log.md) with optional frontmatter.
+func writeReserved(t *testing.T, dir, name, content string) {
+	t.Helper()
+	full := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("writeReserved: mkdir %s: %v", filepath.Dir(full), err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatalf("writeReserved: write %s: %v", full, err)
+	}
+}
+
 // writeDoc creates a markdown file with valid OKF YAML frontmatter in dir.
 // name is the file path relative to dir (e.g. "foo/doc.md").
 func writeDoc(t *testing.T, dir, name, title, docType string, tags []string) {
@@ -243,5 +255,244 @@ func TestDocsCopy(t *testing.T) {
 	}
 	if len(fresh) != 1 {
 		t.Errorf("Docs() len = %d after external append, want 1", len(fresh))
+	}
+}
+
+// TestReserved_AppearsInReserved verifies that reserved files appear in Reserved()
+// with correct relative paths.
+func TestReserved_AppearsInReserved(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeReserved(t, dir, "index.md", "# Index\n")
+	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
+	writeDoc(t, dir, "docs/arch.md", "Arch", "Architecture", nil)
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	reserved := idx.Reserved()
+	if len(reserved) != 2 {
+		t.Fatalf("Reserved() = %d files, want 2", len(reserved))
+	}
+
+	paths := make(map[string]bool)
+	for _, rf := range reserved {
+		paths[rf.FilePath] = true
+		if filepath.IsAbs(rf.FilePath) {
+			t.Errorf("Reserved file path is absolute: %q (invariant I-1)", rf.FilePath)
+		}
+	}
+	if !paths["index.md"] {
+		t.Error("index.md not found in Reserved()")
+	}
+	if !paths["docs/log.md"] {
+		t.Error("docs/log.md not found in Reserved()")
+	}
+}
+
+// TestReserved_NotInDocs verifies invariant I-4 + I-8:
+// reserved files never appear in Docs().
+func TestReserved_NotInDocs(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeReserved(t, dir, "index.md", "# Index\n")
+	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
+	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	docs := idx.Docs()
+	for _, doc := range docs {
+		if doc.FilePath == "index.md" || doc.FilePath == "docs/log.md" {
+			t.Errorf("reserved file %q must not appear in Docs() (invariant I-4)", doc.FilePath)
+		}
+	}
+}
+
+// TestReserved_FrontmatterDetection verifies HasFrontmatter and Type fields.
+func TestReserved_FrontmatterDetection(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeReserved(t, dir, "index.md", "# Index\n")
+	writeReserved(t, dir, "docs/log.md", "---\ntitle: Log\ntype: Log\n---\n# Log\n")
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	reserved := idx.Reserved()
+	rfMap := make(map[string]ReservedFile)
+	for _, rf := range reserved {
+		rfMap[rf.FilePath] = rf
+	}
+
+	if rf, ok := rfMap["index.md"]; ok {
+		if rf.HasFrontmatter {
+			t.Error("index.md should not have frontmatter")
+		}
+	} else {
+		t.Error("index.md not found in Reserved()")
+	}
+
+	if rf, ok := rfMap["docs/log.md"]; ok {
+		if !rf.HasFrontmatter {
+			t.Error("docs/log.md should have frontmatter")
+		}
+		if rf.Type != "Log" {
+			t.Errorf("docs/log.md Type = %q, want %q", rf.Type, "Log")
+		}
+	} else {
+		t.Error("docs/log.md not found in Reserved()")
+	}
+}
+
+// TestTree_MultiLevel verifies Tree() returns the correct nested structure.
+func TestTree_MultiLevel(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeReserved(t, dir, "index.md", "# Index\n")
+	writeReserved(t, dir, "docs/log.md", "---\ntitle: Log\ntype: Log\n---\n# Log\n")
+	writeDoc(t, dir, "docs/arch.md", "Architecture", "Architecture", []string{"design"})
+	writeDoc(t, dir, "docs/tools.md", "Tools", "API Reference", nil)
+	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	tree := idx.Tree()
+
+	if tree.Name != "." || tree.Path != "" || tree.Type != "directory" {
+		t.Errorf("root = {Name:%q Path:%q Type:%q}, want{Name:. Path: Type:directory}", tree.Name, tree.Path, tree.Type)
+	}
+	if len(tree.Children) == 0 {
+		t.Fatal("root has no children")
+	}
+
+	indexNode := findTreeNode(tree, "index.md")
+	if indexNode == nil || indexNode.Type != "reserved" {
+		t.Errorf("index.md Type = %q, want %q", indexNode.Type, "reserved")
+	}
+
+	guideNode := findTreeNode(tree, "guide.md")
+	if guideNode == nil || guideNode.Type != "file" || guideNode.DocType != "guide" {
+		t.Errorf("guide.md = {Type:%q DocType:%q}, want{Type:file DocType:guide}", guideNode.Type, guideNode.DocType)
+	}
+
+	docsDir := findChild(&tree, "docs")
+	if docsDir == nil || docsDir.Type != "directory" {
+		t.Fatal("docs/ directory not found in tree")
+	}
+	if len(docsDir.Children) != 3 {
+		t.Fatalf("docs/ has %d children, want 3", len(docsDir.Children))
+	}
+
+	archNode := findTreeNode(*docsDir, "arch.md")
+	if archNode == nil || archNode.DocType != "Architecture" {
+		t.Errorf("docs/arch.md DocType = %q, want Architecture", archNode.DocType)
+	}
+
+	logNode := findTreeNode(*docsDir, "log.md")
+	if logNode == nil || logNode.Type != "reserved" || logNode.DocType != "Log" {
+		t.Errorf("docs/log.md = {Type:%q DocType:%q}, want{Type:reserved DocType:Log}", logNode.Type, logNode.DocType)
+	}
+
+	toolsNode := findTreeNode(*docsDir, "tools.md")
+	if toolsNode == nil || toolsNode.Title != "Tools" {
+		t.Errorf("docs/tools.md Title = %q, want Tools", toolsNode.Title)
+	}
+}
+
+// TestTree_EmptyIndex verifies that an empty index returns a root with no children.
+func TestTree_EmptyIndex(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeRaw(t, dir, "README.txt", "not markdown")
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	tree := idx.Tree()
+	if tree.Name != "." {
+		t.Errorf("root Name = %q, want %q", tree.Name, ".")
+	}
+	if len(tree.Children) != 0 {
+		t.Errorf("root has %d children, want 0", len(tree.Children))
+	}
+}
+
+// TestTree_IncludesReservedAsReservedType verifies reserved files appear with type "reserved".
+func TestTree_IncludesReservedAsReservedType(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeReserved(t, dir, "index.md", "# Index\n")
+	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
+	writeDoc(t, dir, "docs/arch.md", "Arch", "Architecture", nil)
+
+	idx := New(dir)
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	tree := idx.Tree()
+	var reservedPaths, filePaths []string
+	collectLeaves(tree, &reservedPaths, &filePaths)
+
+	for _, p := range reservedPaths {
+		if p != "index.md" && p != "docs/log.md" {
+			t.Errorf("unexpected reserved file in tree: %s", p)
+		}
+	}
+	for _, p := range filePaths {
+		if p == "index.md" || p == "docs/log.md" {
+			t.Errorf("reserved file %s has wrong type (should be reserved, got file)", p)
+		}
+	}
+	if len(reservedPaths) != 2 {
+		t.Errorf("found %d reserved nodes, want 2", len(reservedPaths))
+	}
+}
+
+// findTreeNode searches for a node by name in the tree (depth-first).
+func findTreeNode(node TreeNode, name string) *TreeNode {
+	if node.Name == name {
+		return &node
+	}
+	for i := range node.Children {
+		if found := findTreeNode(node.Children[i], name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// collectLeaves recursively collects file paths by type.
+func collectLeaves(node TreeNode, reserved, files *[]string) {
+	if len(node.Children) == 0 {
+		switch node.Type {
+		case "reserved":
+			*reserved = append(*reserved, node.Path)
+		case "file":
+			*files = append(*files, node.Path)
+		}
+		return
+	}
+	for _, child := range node.Children {
+		collectLeaves(child, reserved, files)
 	}
 }

@@ -15,19 +15,25 @@ var reserved = map[string]bool{
 	"log.md":   true,
 }
 
-// Scan walks dir recursively and returns the absolute paths of all indexable
-// .md files found within.
+// ScanResult holds the results of a full directory scan.
+type ScanResult struct {
+	Docs     []string // absolute paths of indexable .md files
+	Reserved []string // absolute paths of reserved files (index.md, log.md)
+}
+
+// ScanAll walks dir recursively and returns both indexable and reserved file
+// paths in a ScanResult.
 //
 // Skip rules (applied in order):
 //  1. Any directory whose name starts with '.' is skipped entirely (I-5).
-//  2. Files named exactly "index.md" or "log.md" are skipped (I-4).
+//  2. Reserved filenames (index.md, log.md) are collected in Reserved, not Docs (I-4).
 //  3. Files whose extension is not ".md" are skipped.
-//  4. Directory entries themselves are never included in the result.
+//  4. Directory entries themselves are never included in either slice.
 //
 // dir must be an absolute path; the caller is responsible for providing it.
-// Returns nil, nil when dir exists but contains no matching files.
-func Scan(dir string) ([]string, error) {
-	var paths []string
+// Returns an empty ScanResult, nil when dir exists but contains no matching files.
+func ScanAll(dir string) (ScanResult, error) {
+	var result ScanResult
 
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -46,8 +52,9 @@ func Scan(dir string) ([]string, error) {
 			return nil
 		}
 
-		// Rule 2: skip OKF reserved filenames (I-4).
+		// Rule 2: reserved filenames go into Reserved, not Docs (I-4).
 		if reserved[name] {
+			result.Reserved = append(result.Reserved, path)
 			return nil
 		}
 
@@ -56,12 +63,26 @@ func Scan(dir string) ([]string, error) {
 			return nil
 		}
 
-		paths = append(paths, path)
+		result.Docs = append(result.Docs, path)
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return ScanResult{}, err
 	}
 
-	return paths, nil
+	return result, nil
+}
+
+// Scan walks dir recursively and returns the absolute paths of all indexable
+// .md files found within. It delegates to ScanAll and returns only the Docs
+// slice.
+//
+// dir must be an absolute path; the caller is responsible for providing it.
+// Returns nil, nil when dir exists but contains no matching files.
+func Scan(dir string) ([]string, error) {
+	r, err := ScanAll(dir)
+	if err != nil {
+		return nil, err
+	}
+	return r.Docs, nil
 }

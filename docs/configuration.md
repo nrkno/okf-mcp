@@ -3,7 +3,7 @@ type: Configuration
 title: Configuration
 description: How to register okf-mcp in opencode, Claude Desktop, and other MCP hosts, including permission strings and auto-registration behaviour.
 tags: [configuration, mcp, opencode, claude, permissions, client-setup]
-timestamp: 2026-07-15T00:00:00Z
+timestamp: 2026-07-18T00:00:00Z
 ---
 
 # Configuration
@@ -26,7 +26,7 @@ This confirms which directory is being scanned. If the path is wrong, adjust the
 
 ## opencode
 
-Add a server entry to `opencode.json` and include all three tool names in the `permissions.allow` list:
+Add a server entry to `opencode.json` and include all six tool names in the `permissions.allow` list:
 
 ```json
 {
@@ -41,13 +41,16 @@ Add a server entry to `opencode.json` and include all three tool names in the `p
     "allow": [
       "mcp__okf-mcp__list_tags",
       "mcp__okf-mcp__list_docs",
-      "mcp__okf-mcp__get_doc"
+      "mcp__okf-mcp__get_doc",
+      "mcp__okf-mcp__validate_doc",
+      "mcp__okf-mcp__get_index",
+      "mcp__okf-mcp__get_log"
     ]
   }
 }
 ```
 
-The three permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
+The six permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
 
 ## Claude Desktop
 
