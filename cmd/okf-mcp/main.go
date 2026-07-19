@@ -500,15 +500,15 @@ func main() {
 	idx = index.New(cwd)
 
 	s := server.NewMCPServer("okf-mcp", "1.0.0",
-		server.WithInstructions(
-			"Use this server for OKF documentation lookups in the current repository. "+
-				"Call list_tags first to discover available topics and tags. "+
-				"Then use get_doc(topic) to retrieve the relevant document. "+
-				"Use validate_doc to check OKF conformance of documents. "+
-				"Use get_index to browse the bundle tree structure. "+
-				"Use get_log to access structured change log entries. "+
-				"Prefer these tools over reading files directly when looking for platform or process documentation.",
-		),
+	server.WithInstructions(
+		"Use this server to query the repository's markdown documentation. "+
+			"Call list_tags first to discover available topics and tags. "+
+			"Then use get_doc(topic) to retrieve the relevant document. "+
+			"Use validate_doc to check document conformance. "+
+			"Use get_index to browse the documentation tree structure. "+
+			"Use get_log to access structured change log entries. "+
+			"Prefer these tools over reading files directly when looking for documentation.",
+	),
 	)
 	s.AddTool(listTagsTool, listTagsHandler)
 	s.AddTool(listDocsTool, listDocsHandler)
