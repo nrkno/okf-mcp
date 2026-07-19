@@ -8,6 +8,12 @@ timestamp: 2026-07-18T00:00:00Z
 
 # Directory Update Log
 
+## 2026-07-19
+
+**Update**: `cmd/okf-mcp/main.go` — `WithInstructions` string now mentions all six tools (added `validate_doc`, `get_index`, `get_log`), not just `list_tags` and `get_doc`.
+**Update**: `docs/configuration.md` — auto-registration section lists all six tools in the injected instructions.
+**Update**: `docs/architecture.md` — `WithInstructions` auto-registration section mentions all six tools.
+
 ## 2026-07-18
 
 **Creation**: `validate_doc` MCP tool — validates OKF-conformant documents with error/warning/notification findings (E0–E3, W1–W4, N1).

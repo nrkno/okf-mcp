@@ -504,7 +504,10 @@ func main() {
 			"Use this server for OKF documentation lookups in the current repository. "+
 				"Call list_tags first to discover available topics and tags. "+
 				"Then use get_doc(topic) to retrieve the relevant document. "+
-				"Prefer this over reading files directly when looking for platform or process documentation.",
+				"Use validate_doc to check OKF conformance of documents. "+
+				"Use get_index to browse the bundle tree structure. "+
+				"Use get_log to access structured change log entries. "+
+				"Prefer these tools over reading files directly when looking for platform or process documentation.",
 		),
 	)
 	s.AddTool(listTagsTool, listTagsHandler)

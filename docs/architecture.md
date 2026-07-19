@@ -3,7 +3,7 @@ type: Architecture
 title: Architecture
 description: Internal structure of okf-mcp — packages, design invariants, and the weighted scoring model used by get_doc.
 tags: [architecture, scanner, parser, index, matcher, validator, logparser, mcp, scoring]
-timestamp: 2026-07-18T00:00:00Z
+timestamp: 2026-07-19T00:00:00Z
 ---
 
 # Architecture
@@ -115,7 +115,7 @@ Tag filtering is applied before scoring: with `match=and` (the default) the doc 
 
 ## `WithInstructions` auto-registration
 
-`main.go` registers the MCP server with a `WithInstructions(...)` option. The mcp-go library includes this string in the `initialize` response as the `instructions` field. MCP hosts that support this field (opencode does) inject it into the agent system prompt automatically on session start. This means an agent connected to `okf-mcp` will know to call `list_tags` first and `get_doc` to retrieve content, without any explicit AGENTS.md entry or additional configuration.
+`main.go` registers the MCP server with a `WithInstructions(...)` option. The mcp-go library includes this string in the `initialize` response as the `instructions` field. MCP hosts that support this field (opencode does) inject it into the agent system prompt automatically on session start. This means an agent connected to `okf-mcp` will know to call `list_tags` first, `get_doc` to retrieve content, `validate_doc` to check conformance, `get_index` to browse the bundle tree, and `get_log` to access change log entries — without any explicit AGENTS.md entry or additional configuration.
 
 ## Why scan-on-every-call, not a file watcher
 
