@@ -29,16 +29,6 @@ func hasCode(findings []Finding, code string) bool {
 	return false
 }
 
-// countCode counts findings with a specific code.
-func countCode(findings []Finding, code string) int {
-	n := 0
-	for _, f := range findings {
-		if f.Code == code {
-			n++
-		}
-	}
-	return n
-}
 
 func TestValidateDoc_ValidDoc(t *testing.T) {
 	t.Parallel()

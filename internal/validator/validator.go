@@ -312,7 +312,16 @@ func logEntriesChronological(body string) bool {
 //
 // F4 fix: doc.FilePath is relative; must convert to absolute via filepath.Join.
 func ValidateBundle(idx *index.Index) Result {
-	idx.Rebuild()
+	if err := idx.Rebuild(); err != nil {
+		return Result{
+			Summary: Summary{
+				Errors: 1,
+			},
+			Findings: []Finding{
+				{Code: "REBUILD_ERROR", Severity: SeverityError, Message: err.Error()},
+			},
+		}
+	}
 	knownTypes := uniqueTypes(idx.Docs())
 	var findings []Finding
 

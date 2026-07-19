@@ -747,8 +747,10 @@ func TestGetLog_ValidEntries(t *testing.T) {
 func TestGetLog_MissingLog(t *testing.T) {
 	// Fixture with no log.md.
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "guide.md"),
-		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	srv := newFixtureServer(t, dir)
 	defer srv.Close()
@@ -832,8 +834,10 @@ func TestGetLog_Filtered(t *testing.T) {
 func TestCLI_Validate_NoErrors(t *testing.T) {
 	dir := t.TempDir()
 	// Write a valid OKF doc.
-	os.WriteFile(filepath.Join(dir, "guide.md"),
-		[]byte(frontmatter("guide", "User Guide", "A guide", []string{"api"})), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "User Guide", "A guide", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	bin := buildBinary(t)
 	exit := runBinary(t, bin, dir, "--validate")
@@ -845,8 +849,10 @@ func TestCLI_Validate_NoErrors(t *testing.T) {
 func TestCLI_Validate_WithErrors(t *testing.T) {
 	dir := t.TempDir()
 	// Write an index.md WITH frontmatter → E3 (index.md must not have frontmatter).
-	os.WriteFile(filepath.Join(dir, "index.md"),
-		[]byte("---\ntype: Index\ntitle: Index\ndescription: Index page\n---\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "index.md"),
+		[]byte("---\ntype: Index\ntitle: Index\ndescription: Index page\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	bin := buildBinary(t)
 	exit := runBinary(t, bin, dir, "--validate")
@@ -858,9 +864,13 @@ func TestCLI_Validate_WithErrors(t *testing.T) {
 func TestCLI_Validate_WithPath(t *testing.T) {
 	dir := t.TempDir()
 	docsDir := filepath.Join(dir, "docs")
-	os.MkdirAll(docsDir, 0o755)
-	os.WriteFile(filepath.Join(docsDir, "guide.md"),
-		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644)
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(docsDir, "guide.md"),
+		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	bin := buildBinary(t)
 	exit := runBinary(t, bin, dir, "--validate", "--path", "docs")
@@ -885,7 +895,7 @@ func runBinary(t *testing.T, bin, workDir string, args ...string) int {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = workDir
-	cmd.Run()
+	_ = cmd.Run()
 	return cmd.ProcessState.ExitCode()
 }
 
