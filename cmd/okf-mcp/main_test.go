@@ -14,7 +14,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
-	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
@@ -252,9 +251,6 @@ func setupMultiBundleFixture(t *testing.T) string {
 	return dir
 }
 
-// TestListDocs_BundleField verifies that each entry in list_docs carries a
-// correct bundle field per the walk-up rule (I-17). Hidden-bundle docs are
-// only visible with EnableHidden: true.
 
 // TestListDocs_BundleField verifies that each entry in list_docs carries a
 // correct bundle field per the walk-up rule (I-17). Hidden-bundle docs are
@@ -299,9 +295,6 @@ func TestListDocs_BundleField(t *testing.T) {
 	}
 }
 
-// TestGetDoc_ByTopic verifies get_doc retrieves guide.md for topic="guide",
-// that file_path is relative (I-1), and that content is the markdown body
-// only — no leading frontmatter block.
 
 // TestGetDoc_ByTopic verifies get_doc retrieves guide.md for topic="guide",
 // that file_path is relative (I-1), and that content is the markdown body
@@ -626,11 +619,6 @@ func TestGetDoc_BundleField(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
-// ---------------------------------------------------------------------------
-// Tool count
-// ---------------------------------------------------------------------------
-
-// TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
 func TestNewFixtureServerToolsCount(t *testing.T) {
 	dir := setupFixtureDir(t)
 	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
@@ -914,11 +902,6 @@ func TestGetIndex_BundleOnLeaves(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // setupLogFixture creates a fixture with a log.md containing valid log entries.
-// ---------------------------------------------------------------------------
-// get_log tests
-// ---------------------------------------------------------------------------
-
-// setupLogFixture creates a fixture with a log.md containing valid log entries.
 func setupLogFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -939,6 +922,7 @@ func setupLogFixture(t *testing.T) string {
 	return dir
 }
 
+
 func TestGetLog_ValidEntries(t *testing.T) {
 	dir := setupLogFixture(t)
 	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
@@ -950,8 +934,7 @@ func TestGetLog_ValidEntries(t *testing.T) {
 	}
 
 	var resp struct {
-		Entries []logparser.LogEntry `json:"entries"`
-		Source  string               `json:"source"`
+		Entries []logEntryJSON `json:"entries"`
 	}
 	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -963,16 +946,201 @@ func TestGetLog_ValidEntries(t *testing.T) {
 	if resp.Entries[0].Date != "2025-07-10" {
 		t.Errorf("entries[0].Date: got %q, want 2025-07-10", resp.Entries[0].Date)
 	}
-	if resp.Source == "" {
-		t.Error("expected non-empty source")
+	// I-12 (amended): each entry carries a per-entry source; top-level source
+	// is removed. Single-bundle repos have a single log.md path repeated.
+	for i, e := range resp.Entries {
+		if e.Source == "" {
+			t.Errorf("entries[%d].Source is empty (per-entry source required)", i)
+		}
+	}
+	if got, want := resp.Entries[0].Source, "log.md"; got != want {
+		t.Errorf("entries[0].Source: got %q, want %q", got, want)
 	}
 }
 
-func TestGetLog_MissingLog(t *testing.T) {
-	// Fixture with no log.md.
+
+func TestGetLog_Filtered(t *testing.T) {
+	dir := setupLogFixture(t)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
+	defer srv.Close()
+
+	// Helper: parse a get_log response into entries and return them. Uses a
+	// generic map (not logparser.LogEntry) so the per-entry Source field is
+	// observable — silently dropped by the typed struct.
+	parse := func(result *mcp.CallToolResult) []map[string]any {
+		t.Helper()
+		var resp struct {
+			Entries []map[string]any `json:"entries"`
+		}
+		if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return resp.Entries
+	}
+
+	// Filter by action=Update.
+	result := callTool(t, srv, "get_log", map[string]any{"action": "Update"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	entries := parse(result)
+	if len(entries) != 1 {
+		t.Fatalf("action=Update: got %d entries, want 1", len(entries))
+	}
+	if entries[0]["action"] != "Update" {
+		t.Errorf("action: got %q, want Update", entries[0]["action"])
+	}
+	if entries[0]["source"] != "log.md" {
+		t.Errorf("action=Update: source stripped by filter: got %v, want log.md", entries[0]["source"])
+	}
+
+	// Filter by since.
+	result = callTool(t, srv, "get_log", map[string]any{"since": "2025-07-01"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	entries = parse(result)
+	if len(entries) != 1 {
+		t.Fatalf("since=2025-07-01: got %d entries, want 1", len(entries))
+	}
+	if entries[0]["date"] != "2025-07-10" {
+		t.Errorf("date: got %v, want 2025-07-10", entries[0]["date"])
+	}
+	if entries[0]["source"] != "log.md" {
+		t.Errorf("since filter: source stripped: got %v, want log.md", entries[0]["source"])
+	}
+
+	// Filter by limit.
+	result = callTool(t, srv, "get_log", map[string]any{"limit": float64(1)})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	entries = parse(result)
+	if len(entries) != 1 {
+		t.Fatalf("limit=1: got %d entries, want 1", len(entries))
+	}
+}
+
+
+// TestGetLog_MultiSource verifies multi-bundle log aggregation. Two log.md
+// files (one visible, one hidden) are merged, each entry is tagged with its
+// source log.md path, and the sort tiebreak (same date from different sources
+// → source path ascending) is exercised explicitly (critic m3). Requires
+// EnableHidden: true per design §7 / critic M2.
+func TestGetLog_MultiSource(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "guide.md"),
-		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644); err != nil {
+
+	// Visible bundle: docs/.
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "index.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "arch.md"),
+		[]byte(frontmatter("Architecture", "Architecture", "System design", []string{"design"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	docsLog := "---\ntype: Log\ntitle: Log\ndescription: Change log\ntags:\n  - log\n---\n" +
+		"## 2026-07-23\n\n**Update**: `[arch.md](/docs/arch.md)` — Visible bundle update\n\n" +
+		"## 2026-07-20\n\n**Update**: `[arch.md](/docs/arch.md)` — Older visible update\n"
+	if err := os.WriteFile(filepath.Join(dir, "docs", "log.md"), []byte(docsLog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hidden bundle: .opencode/architecture/ — primary motivation for the
+	// flag (critic M2). This log.md was silently dropped under the old
+	// first-wins behavior.
+	if err := os.MkdirAll(filepath.Join(dir, ".opencode", "architecture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".opencode", "architecture", "index.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".opencode", "architecture", "design.md"),
+		[]byte(frontmatter("Architecture", "API Design", "API patterns", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hiddenLog := "---\ntype: Log\ntitle: Log\ndescription: Change log\ntags:\n  - log\n---\n" +
+		"## 2026-07-23\n\n**Update**: `[design.md](/.opencode/architecture/design.md)` — Hidden bundle update\n\n" +
+		"## 2026-07-22\n\n**Creation**: `[design.md](/.opencode/architecture/design.md)` — Hidden bundle creation\n"
+	if err := os.WriteFile(filepath.Join(dir, ".opencode", "architecture", "log.md"), []byte(hiddenLog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{EnableHidden: true})
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_log", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Entries []logEntryJSON `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 4 {
+		t.Fatalf("got %d entries, want 4: %+v", len(resp.Entries), resp.Entries)
+	}
+
+	// Every entry must carry a non-empty source path.
+	for i, e := range resp.Entries {
+		if e.Source == "" {
+			t.Errorf("entries[%d].Source is empty (per-entry source required)", i)
+		}
+	}
+
+	// Sort verification: date desc, source asc as tiebreak (critic m3).
+	// Lexicographic source comparison: '.' (46) < 'd' (100), so the
+	// hidden-dir source path sorts before the visible one.
+	type expected struct {
+		date, source string
+	}
+	want := []expected{
+		{"2026-07-23", ".opencode/architecture/log.md"}, // tiebreak: hidden first
+		{"2026-07-23", "docs/log.md"},                  // tiebreak: same date, visible
+		{"2026-07-22", ".opencode/architecture/log.md"},
+		{"2026-07-20", "docs/log.md"},
+	}
+	for i, w := range want {
+		if resp.Entries[i].Date != w.date || resp.Entries[i].Source != w.source {
+			t.Errorf("entries[%d]: got (date=%q, source=%q), want (date=%q, source=%q)",
+				i, resp.Entries[i].Date, resp.Entries[i].Source, w.date, w.source)
+		}
+	}
+
+	// Explicit same-date tiebreak assertion (critic m3): the two 2026-07-23
+	// entries are ordered by source path ascending.
+	if resp.Entries[0].Date == resp.Entries[1].Date &&
+		resp.Entries[0].Source > resp.Entries[1].Source {
+		t.Errorf("same-date tiebreak: entries[0].Source=%q must precede entries[1].Source=%q",
+			resp.Entries[0].Source, resp.Entries[1].Source)
+	}
+}
+
+
+// TestGetLog_SingleSource verifies single-bundle log behavior: one log.md
+// → entries each carry the source path → top-level "source" field is absent
+// from the response (breaking change from pre-Phase 4).
+func TestGetLog_SingleSource(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "index.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "arch.md"),
+		[]byte(frontmatter("Architecture", "Architecture", "System design", []string{"design"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logContent := "---\ntype: Log\ntitle: Log\ndescription: Change log\ntags:\n  - log\n---\n" +
+		"## 2026-07-23\n\n**Update**: `[arch.md](/docs/arch.md)` — Update\n"
+	if err := os.WriteFile(filepath.Join(dir, "docs", "log.md"), []byte(logContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -985,69 +1153,72 @@ func TestGetLog_MissingLog(t *testing.T) {
 	}
 
 	var resp struct {
-		Entries []logparser.LogEntry `json:"entries"`
-		Note    string               `json:"note"`
+		Entries []logEntryJSON `json:"entries"`
 	}
 	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(resp.Entries) != 0 {
-		t.Errorf("expected 0 entries, got %d", len(resp.Entries))
+	if len(resp.Entries) != 1 {
+		t.Fatalf("got %d entries, want 1: %+v", len(resp.Entries), resp.Entries)
 	}
-	if resp.Note != "no log.md found" {
-		t.Errorf("note: got %q, want %q", resp.Note, "no log.md found")
+
+	// Per-entry source required.
+	if got, want := resp.Entries[0].Source, "docs/log.md"; got != want {
+		t.Errorf("entries[0].Source: got %q, want %q", got, want)
+	}
+
+	// Top-level "source" must be absent — design §5 breaking change.
+	// Verified via generic map because the inline struct would silently
+	// ignore an extra "source" key.
+	var generic map[string]any
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &generic); err != nil {
+		t.Fatalf("unmarshal generic: %v", err)
+	}
+	if _, ok := generic["source"]; ok {
+		t.Errorf("response has top-level 'source' field; should be removed (per-entry only): %v", generic)
 	}
 }
 
-func TestGetLog_Filtered(t *testing.T) {
-	dir := setupLogFixture(t)
+
+// TestGetLog_NoLogMd verifies the empty-index response shape: empty entries
+// array and the "no log.md found" note. Top-level "source" must be absent.
+// Per design §4 (Empty index) and §5.
+func TestGetLog_NoLogMd(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "User Guide", "A guide", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
-	// Filter by action=Update.
-	result := callTool(t, srv, "get_log", map[string]any{"action": "Update"})
+	result := callTool(t, srv, "get_log", nil)
 	if result.IsError {
 		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
 	}
 
-	var resp struct {
-		Entries []logparser.LogEntry `json:"entries"`
-	}
-	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(resp.Entries) != 1 {
-		t.Fatalf("got %d entries, want 1", len(resp.Entries))
-	}
-	if resp.Entries[0].Action != "Update" {
-		t.Errorf("action: got %q, want Update", resp.Entries[0].Action)
+	// Use a generic map so the absence of "source" is observable.
+	var generic map[string]any
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &generic); err != nil {
+		t.Fatalf("unmarshal generic: %v", err)
 	}
 
-	// Filter by since.
-	result = callTool(t, srv, "get_log", map[string]any{"since": "2025-07-01"})
-	if result.IsError {
-		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	rawEntries, ok := generic["entries"].([]any)
+	if !ok {
+		t.Fatalf("entries is not a JSON array: %v (type %T)", generic["entries"], generic["entries"])
 	}
-	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(resp.Entries) != 1 {
-		t.Fatalf("got %d entries, want 1", len(resp.Entries))
-	}
-	if resp.Entries[0].Date != "2025-07-10" {
-		t.Errorf("date: got %q, want 2025-07-10", resp.Entries[0].Date)
+	if len(rawEntries) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(rawEntries))
 	}
 
-	// Filter by limit.
-	result = callTool(t, srv, "get_log", map[string]any{"limit": float64(1)})
-	if result.IsError {
-		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	note, _ := generic["note"].(string)
+	if note != "no log.md found" {
+		t.Errorf("note: got %q, want %q", note, "no log.md found")
 	}
-	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if len(resp.Entries) != 1 {
-		t.Fatalf("got %d entries, want 1", len(resp.Entries))
+
+	if _, ok := generic["source"]; ok {
+		t.Errorf("response has top-level 'source' field; should be removed: %v", generic)
 	}
 }
 
