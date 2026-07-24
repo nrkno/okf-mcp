@@ -119,7 +119,29 @@ Any code change that alters documented behavior triggers this section — you do
 
 ---
 
-## 7. Key Documentation
+## 7. Conventional Commits & Release Triggers
+
+This repo uses **semantic-release** (`@semantic-release/commit-analyzer` with the `conventionalcommits` preset) to automate releases on push to `main`. The `Conventional Commits` prefix in each merged commit message determines whether a release fires, and at what level. Configuration lives in `.releaserc.json`.
+
+| Prefix | Release level | Version bump (from 0.4.0) |
+|--------|---------------|---------------------------|
+| `feat!:` or `BREAKING CHANGE:` footer | Major | 0.4.0 → 1.0.0 |
+| `feat:` | Minor | 0.4.0 → 0.5.0 |
+| `fix:` | Patch | 0.4.0 → 0.4.1 |
+| `perf:` | Patch | 0.4.0 → 0.4.1 |
+| `chore:`, `docs:`, `style:`, `refactor:`, `test:`, `ci:`, `build:`, `revert:` | **No release** | (no version change) |
+
+> **A `chore:`, `docs:`, `refactor:`, `test:`, or other non-triggering prefix WILL merge cleanly but will NOT produce a release.** This is the gotcha that just bit us.
+
+**Worked example (this session):** PR #13 used `chore(instructions):` and merged without producing a patch release. PR #14 used `fix(instructions):` to land the same content with a patch-release trigger. The content was identical — only the commit prefix differed. `chore:` is invisible to the release pipeline.
+
+**Pre-commit self-check:** Before pushing, read the commit message and ask: *"Does the prefix match the release impact I want?"* Default to `fix:` for any user-facing behavior change, even small ones.
+
+The canonical mapping is in the `conventionalcommits` preset of `@semantic-release/commit-analyzer`. To verify the current rules, check `.releaserc.json` and the workflow in `.github/workflows/create-release.yaml`.
+
+---
+
+## 8. Key Documentation
 
 These docs are served by the `okf-mcp` server itself when running in this repo — agents can call `get_doc(topic="architecture")` directly rather than opening files.
 
