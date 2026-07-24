@@ -1,0 +1,17 @@
+# golangci-lint configuration (v2 schema).
+#
+# `staticcheck` and `unused` are disabled because the
+# honnef.co/go/tools v0.7.0 SSA builder (bundled with golangci-lint v2.12.2)
+# crashes with "interface conversion: interface {} is nil, not *buildir.IR"
+# on Go 1.27 toolchains. This is an upstream issue, not a problem with
+# this codebase. Re-enable both when staticcheck ships a Go 1.27 compatible
+# release (v0.7.1 or later) and bump the golangci-lint pin accordingly.
+#
+# errcheck / govet / ineffassign remain enabled and cover the main classes
+# of bug that staticcheck would have caught in this codebase: unchecked
+# errors, suspicious constructs, and dead assignments.
+version: "2"
+linters:
+  disable:
+    - staticcheck
+    - unused

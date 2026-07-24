@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,6 +17,7 @@ import (
 	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
 	"github.com/nrkno/plattform-okf-mcp/internal/matcher"
 	"github.com/nrkno/plattform-okf-mcp/internal/parser"
+	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
 
@@ -108,6 +110,7 @@ func listDocsHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolRes
 			"description": doc.Description,
 			"tags":        doc.Tags,
 			"file_path":   doc.FilePath,
+			"bundle":      doc.Bundle,
 		}
 	}
 	out, err := json.Marshal(entries)
@@ -198,6 +201,7 @@ func getDocHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 		"tags":        doc.Tags,
 		"title":       doc.Title,
 		"description": doc.Description,
+		"bundle":      doc.Bundle,
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
@@ -369,7 +373,10 @@ func findSubtree(root *index.TreeNode, path string) *index.TreeNode {
 	return current
 }
 
-// getLogHandler returns parsed log.md entries with optional filters.
+// getLogHandler returns parsed log.md entries from ALL log.md files in the
+// index, merged in reverse-chronological order. Each entry is tagged with the
+// relative path of its source log.md. Filters (since, action, limit) apply to
+// the merged list. See design §4 and invariant I-12.
 func getLogHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args := req.GetArguments()
 	since, _ := args["since"].(string)
@@ -385,45 +392,60 @@ func getLogHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Find log.md in reserved files.
-	var logFilePath string
+	// Collect all log.md files from reserved list (one per bundle).
+	var logFiles []string
 	for _, r := range idx.Reserved() {
 		if filepath.Base(r.FilePath) == "log.md" {
-			logFilePath = r.FilePath
-			break
+			logFiles = append(logFiles, r.FilePath)
 		}
 	}
-	if logFilePath == "" {
-		return marshalLogResult(nil, "", "no log.md found")
+	if len(logFiles) == 0 {
+		return marshalLogResult(nil, "no log.md found")
 	}
 
-	// I-2: live read from disk.
-	absPath := filepath.Join(idx.Dir(), logFilePath)
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return marshalLogResult(nil, logFilePath, fmt.Sprintf("failed to read log.md: %v", err))
-	}
-
-	// Extract body after frontmatter.
-	content := string(data)
-	fmInfo := parser.DetectFrontmatter(content)
-	body := content
-	if fmInfo.HasFrontmatter {
-		body = content[fmInfo.BodyOffset:]
-	}
-
-	entries := logparser.Parse(body)
+	// I-2: live read each log.md from disk. Strip frontmatter, parse, and
+	// tag every entry with its source log.md's relative path.
+	var entries []logEntryJSON
 	note := ""
-	if entries == nil && len(strings.TrimSpace(body)) > 0 {
-		note = "log.md has malformed entries"
+	for _, rel := range logFiles {
+		absPath := filepath.Join(idx.Dir(), rel)
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			return marshalLogResult(nil, fmt.Sprintf("failed to read %s: %v", rel, err))
+		}
+		content := string(data)
+		fmInfo := parser.DetectFrontmatter(content)
+		body := content
+		if fmInfo.HasFrontmatter {
+			body = content[fmInfo.BodyOffset:]
+		}
+		parsed := logparser.Parse(body)
+		if parsed == nil && len(strings.TrimSpace(body)) > 0 {
+			note = "log.md has malformed entries"
+		}
+		for _, e := range parsed {
+			entries = append(entries, logEntryJSON{
+				Date:   e.Date,
+				Action: e.Action,
+				Target: e.Target,
+				Detail: e.Detail,
+				Source: rel,
+			})
+		}
 	}
 
-	// Reverse-chronological sort (newest first).
-	sortLogEntries(entries)
+	// Multi-key sort: date desc (newest first), source asc as tiebreak.
+	// SliceStable preserves document order for entries sharing both keys.
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Date != entries[j].Date {
+			return entries[i].Date > entries[j].Date
+		}
+		return entries[i].Source < entries[j].Source
+	})
 
 	// Apply filters.
 	if since != "" {
-		var filtered []logparser.LogEntry
+		filtered := entries[:0]
 		for _, e := range entries {
 			if e.Date >= since {
 				filtered = append(filtered, e)
@@ -432,7 +454,7 @@ func getLogHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 		entries = filtered
 	}
 	if action != "" {
-		var filtered []logparser.LogEntry
+		filtered := entries[:0]
 		for _, e := range entries {
 			if e.Action == action {
 				filtered = append(filtered, e)
@@ -445,25 +467,35 @@ func getLogHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 	}
 
 	if entries == nil {
-		entries = []logparser.LogEntry{}
+		entries = []logEntryJSON{}
 	}
 
-	return marshalLogResult(entries, logFilePath, note)
+	return marshalLogResult(entries, note)
 }
 
-// logResult is the JSON response for get_log.
+// logEntryJSON is one entry in the get_log response. Source is the relative
+// path of the log.md file the entry came from (multi-bundle aggregation).
+type logEntryJSON struct {
+	Date   string `json:"date"`
+	Action string `json:"action"`
+	Target string `json:"target"`
+	Detail string `json:"detail,omitempty"`
+	Source string `json:"source"`
+}
+
+// logResult is the JSON response for get_log. Top-level Source is removed —
+// the per-entry Source field is the source of truth in multi-bundle repos.
 type logResult struct {
-	Entries []logparser.LogEntry `json:"entries"`
-	Source  string               `json:"source"`
-	Note    string               `json:"note,omitempty"`
+	Entries []logEntryJSON `json:"entries"`
+	Note    string         `json:"note,omitempty"`
 }
 
 // marshalLogResult builds the get_log JSON response.
-func marshalLogResult(entries []logparser.LogEntry, source, note string) (*mcp.CallToolResult, error) {
+func marshalLogResult(entries []logEntryJSON, note string) (*mcp.CallToolResult, error) {
 	if entries == nil {
-		entries = []logparser.LogEntry{}
+		entries = []logEntryJSON{}
 	}
-	resp := logResult{Entries: entries, Source: source, Note: note}
+	resp := logResult{Entries: entries, Note: note}
 	out, err := json.Marshal(resp)
 	if err != nil {
 		return mcp.NewToolResultError("failed to marshal log result: " + err.Error()), nil
@@ -471,22 +503,14 @@ func marshalLogResult(entries []logparser.LogEntry, source, note string) (*mcp.C
 	return mcp.NewToolResultText(string(out)), nil
 }
 
-// sortLogEntries sorts entries in reverse-chronological order (newest date first).
-func sortLogEntries(entries []logparser.LogEntry) {
-	for i := 1; i < len(entries); i++ {
-		for j := i; j > 0 && entries[j].Date > entries[j-1].Date; j-- {
-			entries[j], entries[j-1] = entries[j-1], entries[j]
-		}
-	}
-}
-
 func main() {
 	validateFlag := flag.Bool("validate", false, "Validate document conformance and exit (no MCP server)")
 	validatePath := flag.String("path", ".", "Path to validate (relative to cwd)")
+	enableHidden := flag.Bool("enable-hidden", false, "Traverse hidden directories (except .git, .hg, .svn)")
 	flag.Parse()
 
 	if *validateFlag {
-		runValidate(*validatePath)
+		runValidate(*validatePath, *enableHidden)
 		return
 	}
 
@@ -497,7 +521,7 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "okf-mcp: serving %s\n", cwd)
 
-	idx = index.New(cwd)
+	idx = index.New(cwd, scanner.ScanOptions{EnableHidden: *enableHidden})
 
 	s := server.NewMCPServer("okf-mcp", "1.0.0",
 	server.WithInstructions(
@@ -524,13 +548,13 @@ func main() {
 }
 
 // runValidate validates OKF docs at the given path and prints findings to stderr.
-func runValidate(path string) {
+func runValidate(path string, enableHidden bool) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: invalid path: %v\n", err)
 		os.Exit(2)
 	}
-	localIdx := index.New(absPath)
+	localIdx := index.New(absPath, scanner.ScanOptions{EnableHidden: enableHidden})
 	if err := localIdx.Rebuild(); err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: scan error: %v\n", err)
 		os.Exit(2)

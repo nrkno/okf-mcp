@@ -1,9 +1,9 @@
 ---
 type: API Reference
 title: MCP Tools Reference
-description: Complete reference for the six MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, and get_log — including parameters, response shapes, scoring, and error codes.
-tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, mcp, scoring, match]
-timestamp: 2026-07-18T00:00:00Z
+description: Complete reference for the six MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, and get_log — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
+tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, mcp, scoring, match, multi-bundle, bundle]
+timestamp: 2026-07-23T00:00:00Z
 ---
 
 # MCP Tools Reference
@@ -44,8 +44,9 @@ Returns a JSON array of every indexed document with its metadata. File content i
 | `description` | string | Document description from frontmatter |
 | `tags` | string[] | Document tags from frontmatter |
 | `file_path` | string | Relative path from the scan root |
+| `bundle` | string | OKF bundle the file belongs to (I-17) — relative path to the nearest ancestor directory containing `index.md`, or the file's immediate parent directory if no ancestor has one |
 
-**Example response:**
+**Example response (single-bundle repo):**
 
 ```json
 [
@@ -53,7 +54,29 @@ Returns a JSON array of every indexed document with its metadata. File content i
     "title": "Architecture",
     "description": "Internal structure of okf-mcp ...",
     "tags": ["architecture", "scanner", "parser"],
-    "file_path": "docs/architecture.md"
+    "file_path": "docs/architecture.md",
+    "bundle": "docs"
+  }
+]
+```
+
+**Example response (multi-bundle repo, `--enable-hidden` set):**
+
+```json
+[
+  {
+    "title": "Architecture",
+    "description": "Internal structure of okf-mcp ...",
+    "tags": ["architecture"],
+    "file_path": "docs/architecture.md",
+    "bundle": "docs"
+  },
+  {
+    "title": "API Design",
+    "description": "API patterns",
+    "tags": ["api"],
+    "file_path": ".opencode/architecture/api-design.md",
+    "bundle": ".opencode/architecture"
   }
 ]
 ```
@@ -83,6 +106,7 @@ Finds the best-matching document for a topic query and returns its full content 
 | `tags` | string[] | Document tags from frontmatter |
 | `title` | string | Document title from frontmatter |
 | `description` | string | Document description from frontmatter |
+| `bundle` | string | OKF bundle the file belongs to (I-17) — relative path to the nearest ancestor directory containing `index.md`, or the file's immediate parent directory if no ancestor has one |
 
 ### Scoring
 
@@ -106,7 +130,8 @@ Tag filtering (when `tags` is provided) is applied before scoring: with `match=a
   "file_path": "docs/architecture.md",
   "tags": ["architecture", "scanner", "parser", "index", "matcher", "mcp", "scoring"],
   "title": "Architecture",
-  "description": "Internal structure of okf-mcp ..."
+  "description": "Internal structure of okf-mcp ...",
+  "bundle": "docs"
 }
 ```
 
@@ -204,6 +229,7 @@ Returns the bundle tree showing all documents and their directory structure. Use
 | `type` | string | `"file"`, `"directory"`, or `"reserved"` |
 | `doc_type` | string | From frontmatter (e.g. `"Architecture"`), omitted for directories |
 | `title` | string | From frontmatter, omitted for directories |
+| `bundle` | string | OKF bundle the file belongs to (I-17) — **leaf-only** field: present on `file` and `reserved` nodes, absent on `directory` nodes |
 | `children` | TreeNode[] | Child nodes (only present for directories) |
 
 ### Example response
@@ -214,10 +240,10 @@ Returns the bundle tree showing all documents and their directory structure. Use
   "path": "",
   "type": "directory",
   "children": [
-    { "name": "index.md", "path": "index.md", "type": "reserved" },
+    { "name": "index.md", "path": "index.md", "type": "reserved", "bundle": "." },
     { "name": "docs", "path": "docs", "type": "directory", "children": [
-      { "name": "architecture.md", "path": "docs/architecture.md", "type": "file", "doc_type": "Architecture", "title": "Architecture" },
-      { "name": "tools.md", "path": "docs/tools.md", "type": "file", "doc_type": "API Reference", "title": "MCP Tools Reference" }
+      { "name": "architecture.md", "path": "docs/architecture.md", "type": "file", "doc_type": "Architecture", "title": "Architecture", "bundle": "docs" },
+      { "name": "tools.md", "path": "docs/tools.md", "type": "file", "doc_type": "API Reference", "title": "MCP Tools Reference", "bundle": "docs" }
     ]}
   ]
 }
@@ -236,6 +262,8 @@ Returns the bundle tree showing all documents and their directory structure. Use
 
 Returns structured log entries from the documentation change log (`log.md`). Entries are parsed from the markdown body and returned in reverse-chronological order (newest first).
 
+In a multi-bundle repository, `get_log` aggregates entries from **all** `log.md` files (one per bundle — I-12). Each entry is tagged with the relative path of the `log.md` it came from. Hidden-dir `log.md` files (e.g. `.opencode/architecture/log.md`) are aggregated only when the server was started with `--enable-hidden`; otherwise the visible `log.md` (typically `docs/log.md`) is the only source.
+
 ### Parameters
 
 | Param | Type | Required | Default | Description |
@@ -249,8 +277,9 @@ Returns structured log entries from the documentation change log (`log.md`). Ent
 | Field | Type | Description |
 |-------|------|-------------|
 | `entries` | array | Parsed log entries |
-| `source` | string | `file_path` of log.md (relative path) |
-| `note` | string | Present when degraded: `"no log.md found"` or malformed note |
+| `note` | string | Present when degraded: `"no log.md found"` or `"log.md has malformed entries"` |
+
+The response does **not** carry a top-level `source` field. In a multi-bundle repository a single top-level value would be ambiguous; the per-entry `source` is the source of truth.
 
 Each entry object:
 
@@ -260,14 +289,23 @@ Each entry object:
 | `action` | string | Action type (e.g. `"Creation"`, `"Update"`) |
 | `target` | string | Target file path |
 | `detail` | string | Full description text |
+| `source` | string | Relative path of the `log.md` the entry came from (I-12), e.g. `"docs/log.md"` or `".opencode/architecture/log.md"` |
+
+### Sort order
+
+The merged entry list is sorted with a multi-key comparator (I-12):
+
+1. **Primary:** `date` descending (newest first).
+2. **Secondary:** `source` ascending (lexicographic — `.opencode/...` sorts before `docs/...`).
+3. **Tertiary:** document order. `sort.SliceStable` preserves the order entries appeared in the source `log.md` for entries that share both date and source.
 
 ### Fallback behavior
 
-When log.md is missing or malformed, `get_log` never silently returns nothing:
+When no `log.md` is found or one is malformed, `get_log` never silently returns nothing:
 
 | Situation | Response |
 |-----------|----------|
-| No log.md found in bundle | `{"entries": [], "source": "", "note": "no log.md found"}` |
+| No log.md found in any bundle | `{"entries": [], "note": "no log.md found"}` |
 | log.md has malformed entries | Parsed entries returned with `"note": "log.md has malformed entries"` |
 
 ### Usage pattern
