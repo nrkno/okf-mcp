@@ -525,13 +525,12 @@ func main() {
 
 	s := server.NewMCPServer("okf-mcp", "1.0.0",
 	server.WithInstructions(
-		"Use this server to query the repository's markdown documentation. "+
-			"Call list_tags first to discover available topics and tags. "+
-			"Then use get_doc(topic) to retrieve the relevant document. "+
-			"Use validate_doc to check document conformance. "+
-			"Use get_index to browse the documentation tree structure. "+
-			"Use get_log to access structured change log entries. "+
-			"Prefer these tools over reading files directly when looking for documentation.",
+		"This server is the primary way to find documentation, code definitions, architecture design, decision records, and reports in this repository — use it before reading files directly. "+
+			"Start with `get_index` to see the tree and the OKF bundles in scope. "+
+			"Each indexed document carries a `bundle` field naming its OKF bundle. "+
+			"Then use `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` to retrieve a document (scored by title/tag/description match), "+
+			"`validate_doc` to check conformance, or `get_log` for change log entries (each tagged with its source `log.md` path). "+
+			"The server is launched with `--enable-hidden` to include dot-directories like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.",
 	),
 	)
 	s.AddTool(listTagsTool, listTagsHandler)

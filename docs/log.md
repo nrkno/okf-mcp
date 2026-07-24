@@ -10,6 +10,9 @@ timestamp: 2026-07-23T00:00:00Z
 
 ## 2026-07-23
 
+**Update**: `cmd/okf-mcp/main.go` — `WithInstructions` string rewritten to lead with use cases (documentation, code definitions, architecture design, decision records, reports) so any agent that hits a documentation-adjacent question routes to okf-mcp before reading files directly; per-tool guidance updated to reflect 0.4.0 behavior (`get_index` first to discover tree + bundles, `bundle` field on responses, per-entry `source` on `get_log`, `--enable-hidden` for multi-bundle repos, VCS always-skip).
+**Update**: `docs/architecture.md` — `WithInstructions` auto-registration section rewritten to match the new instructions language (use-case-led, `get_index` first, bundle-aware, hidden-dir note).
+**Update**: `docs/configuration.md` — Auto-registration section rewritten to match the new instructions language (tools reordered, bundle/hidden-dir context added).
 **Update**: `cmd/okf-mcp/main.go` — added `--enable-hidden` CLI flag; threaded through `index.New` in both the MCP server path and the `--validate` path so hidden-dir OKF bundles (e.g. `.opencode/architecture/`) become first-class indexable bundles.
 **Update**: `cmd/okf-mcp/main.go` — `get_log` response now aggregates entries from all `log.md` files in the index (multi-bundle), each entry tagged with its source; top-level `source` field removed (the prior first-wins behavior was a latent bug that silently dropped non-first `log.md` entries).
 **Update**: `cmd/okf-mcp/main.go` — `list_docs`, `get_doc`, and `get_index` response shapes now include a `bundle` field on each doc and on every leaf tree node; the field is the relative path to the nearest ancestor directory containing `index.md` (or the file's immediate parent directory as fallback).
