@@ -15,6 +15,19 @@ var reserved = map[string]bool{
 	"log.md":   true,
 }
 
+// vcsDirs is the set of VCS-internal directory names that are always skipped
+// regardless of ScanOptions (I-19).
+var vcsDirs = map[string]bool{
+	".git": true,
+	".hg":  true,
+	".svn": true,
+}
+
+// ScanOptions controls optional scanner behaviour.
+type ScanOptions struct {
+	EnableHidden bool // traverse hidden directories (except VCS internals)
+}
+
 // ScanResult holds the results of a full directory scan.
 type ScanResult struct {
 	Docs     []string // absolute paths of indexable .md files
@@ -25,14 +38,15 @@ type ScanResult struct {
 // paths in a ScanResult.
 //
 // Skip rules (applied in order):
-//  1. Any directory whose name starts with '.' is skipped entirely (I-5).
+//  1. VCS-internal directories (.git, .hg, .svn) are always skipped (I-19).
+//     Other hidden directories are skipped unless opts.EnableHidden is true (I-5).
 //  2. Reserved filenames (index.md, log.md) are collected in Reserved, not Docs (I-4).
 //  3. Files whose extension is not ".md" are skipped.
 //  4. Directory entries themselves are never included in either slice.
 //
 // dir must be an absolute path; the caller is responsible for providing it.
 // Returns an empty ScanResult, nil when dir exists but contains no matching files.
-func ScanAll(dir string) (ScanResult, error) {
+func ScanAll(dir string, opts ScanOptions) (ScanResult, error) {
 	var result ScanResult
 
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -42,9 +56,14 @@ func ScanAll(dir string) (ScanResult, error) {
 
 		name := d.Name()
 
-		// Rule 1: skip hidden directories entirely (I-5).
+		// Rule 1: VCS internals always skipped; other hidden dirs skipped unless EnableHidden is set (I-5, I-19).
 		if d.IsDir() && strings.HasPrefix(name, ".") {
-			return fs.SkipDir
+			if vcsDirs[name] {
+				return fs.SkipDir
+			}
+			if !opts.EnableHidden {
+				return fs.SkipDir
+			}
 		}
 
 		// Directories themselves are never added to results.
@@ -80,7 +99,7 @@ func ScanAll(dir string) (ScanResult, error) {
 // dir must be an absolute path; the caller is responsible for providing it.
 // Returns nil, nil when dir exists but contains no matching files.
 func Scan(dir string) ([]string, error) {
-	r, err := ScanAll(dir)
+	r, err := ScanAll(dir, ScanOptions{})
 	if err != nil {
 		return nil, err
 	}
