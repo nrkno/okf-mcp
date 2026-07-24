@@ -20,6 +20,7 @@ type ReservedFile struct {
 	FilePath       string // relative path (e.g. "index.md", "docs/log.md")
 	HasFrontmatter bool
 	Type           string // from frontmatter if present, empty otherwise
+	Bundle         string // nearest ancestor dir containing index.md
 }
 
 // TreeNode represents a node in the bundle tree.
@@ -29,6 +30,7 @@ type TreeNode struct {
 	Type     string     `json:"type"`               // "file", "directory", "reserved"
 	DocType  string     `json:"doc_type,omitempty"` // from frontmatter (e.g. "Architecture")
 	Title    string     `json:"title,omitempty"`    // from frontmatter
+	Bundle   string     `json:"bundle,omitempty"`  // only on file/reserved leaves
 	Children []TreeNode `json:"children,omitempty"` // non-nil for directories
 }
 
@@ -36,6 +38,7 @@ type TreeNode struct {
 // It is safe for concurrent use: mcp-go dispatches handlers in goroutines.
 type Index struct {
 	dir      string // absolute path to scan root
+	scanOpts scanner.ScanOptions
 	mu       sync.Mutex
 	docs     []parser.Doc
 	reserved []ReservedFile
@@ -43,8 +46,8 @@ type Index struct {
 
 // New returns an empty Index rooted at dir.
 // Call Rebuild to populate it.
-func New(dir string) *Index {
-	return &Index{dir: dir}
+func New(dir string, opts scanner.ScanOptions) *Index {
+	return &Index{dir: dir, scanOpts: opts}
 }
 
 // Dir returns the absolute path to the scan root for this Index.
@@ -61,7 +64,7 @@ func (idx *Index) Dir() string {
 // If no conformant docs are found the result is logged as a warning to stderr
 // and Rebuild returns nil (invariant I-7: zero docs is not an error).
 func (idx *Index) Rebuild() error {
-	result, err := scanner.ScanAll(idx.dir)
+	result, err := scanner.ScanAll(idx.dir, idx.scanOpts)
 	if err != nil {
 		return fmt.Errorf("index: scan %s: %w", idx.dir, err)
 	}
@@ -100,6 +103,18 @@ func (idx *Index) Rebuild() error {
 		rf := ReservedFile{FilePath: rel}
 		rf.HasFrontmatter, rf.Type = detectReservedFrontmatter(absPath)
 		reserved = append(reserved, rf)
+	}
+
+	// Compute bundle for each doc and reserved file.
+	reservedSet := make(map[string]bool, len(reserved))
+	for _, rf := range reserved {
+		reservedSet[rf.FilePath] = true
+	}
+	for i := range docs {
+		docs[i].Bundle = resolveBundle(docs[i].FilePath, reservedSet)
+	}
+	for i := range reserved {
+		reserved[i].Bundle = resolveBundle(reserved[i].FilePath, reservedSet)
 	}
 
 	if len(docs) == 0 {
@@ -187,6 +202,7 @@ func (idx *Index) Tree() TreeNode {
 			Type:    "file",
 			DocType: doc.Type,
 			Title:   doc.Title,
+			Bundle:  doc.Bundle,
 		})
 	}
 
@@ -197,6 +213,7 @@ func (idx *Index) Tree() TreeNode {
 			Path:    rf.FilePath,
 			Type:    "reserved",
 			DocType: rf.Type,
+			Bundle:  rf.Bundle,
 		})
 	}
 
@@ -206,6 +223,32 @@ func (idx *Index) Tree() TreeNode {
 	}
 
 	return root
+}
+
+// resolveBundle computes the bundle identifier for a file by walking up from
+// its parent directory to find the nearest ancestor containing an index.md.
+// reservedSet is the set of reserved file paths (including all index.md files).
+// Returns the directory containing index.md, or the immediate parent directory
+// as fallback.
+func resolveBundle(filePath string, reservedSet map[string]bool) string {
+	dir := filepath.Dir(filePath)
+
+	for d := dir; ; d = filepath.Dir(d) {
+		candidate := filepath.Join(d, "index.md")
+		if reservedSet[candidate] {
+			return d
+		}
+		if d == "." || d == "" {
+			break
+		}
+		parent := filepath.Dir(d)
+		if parent == d { // reached root
+			break
+		}
+	}
+
+	// Fallback: immediate parent directory.
+	return dir
 }
 
 // insertNode places a leaf node into the tree at the path given by segments.

@@ -21,6 +21,7 @@ type Doc struct {
 	// If the file has no body (frontmatter only), BodyOffset equals len(fileContent)
 	// so the slice returns "".
 	BodyOffset int
+	Bundle      string // set by index package during Rebuild, not by the parser
 }
 
 // FrontmatterInfo holds the result of frontmatter detection.

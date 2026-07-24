@@ -15,6 +15,7 @@ import (
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
 	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
+	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
 
@@ -83,14 +84,16 @@ func setupFixtureDir(t *testing.T) string {
 // newFixtureServer must not be called from parallel tests.
 // It mutates the package-level idx variable and restores it via t.Cleanup.
 //
-// newFixtureServer sets idx to a new index rooted at dir, registers a
-// t.Cleanup to restore it, then starts an mcptest.Server with all six
-// production tools. The caller must defer srv.Close().
-func newFixtureServer(t *testing.T, dir string) *mcptest.Server {
+// newFixtureServer sets idx to a new index rooted at dir with the given
+// scan options (use scanner.ScanOptions{} for default behavior, or
+// scanner.ScanOptions{EnableHidden: true} for tests that exercise hidden
+// bundle directories), registers a t.Cleanup to restore idx, then starts an
+// mcptest.Server with all six production tools. The caller must defer srv.Close().
+func newFixtureServer(t *testing.T, dir string, opts scanner.ScanOptions) *mcptest.Server {
 	t.Helper()
 
 	origIdx := idx
-	idx = index.New(dir)
+	idx = index.New(dir, opts)
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
@@ -151,7 +154,7 @@ func callTool(t *testing.T, srv *mcptest.Server, name string, args map[string]an
 // Only guide.md (api, setup) and reference.md (api) are indexed — want ["api","setup"].
 func TestListTags(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "list_tags", nil)
@@ -179,7 +182,7 @@ func TestListTags(t *testing.T) {
 // excluded files (I-3, I-4, I-5) are absent from the result.
 func TestListDocs_Count(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "list_docs", nil)
@@ -217,7 +220,7 @@ func TestListDocs_Count(t *testing.T) {
 // only — no leading frontmatter block.
 func TestGetDoc_ByTopic(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{"topic": "guide"})
@@ -250,7 +253,7 @@ func TestGetDoc_ByTopic(t *testing.T) {
 // only guide.md (the sole doc with tag "setup").
 func TestGetDoc_AndFilter(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{
@@ -277,7 +280,7 @@ func TestGetDoc_AndFilter(t *testing.T) {
 // a doc that has at least one of those tags (guide.md has "setup").
 func TestGetDoc_OrFilter(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{
@@ -304,7 +307,7 @@ func TestGetDoc_OrFilter(t *testing.T) {
 // "no document matched" when the topic has no match.
 func TestGetDoc_NoMatch(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{"topic": "xyz"})
@@ -324,7 +327,7 @@ func TestGetDoc_NoMatch(t *testing.T) {
 // Constraint 4: owns its idx and its mcptest.NewServer. NOT t.Parallel().
 func TestGetDoc_EmptyIndex(t *testing.T) {
 	origIdx := idx
-	idx = index.New(t.TempDir()) // empty dir — zero .md files
+	idx = index.New(t.TempDir(), scanner.ScanOptions{}) // empty dir — zero .md files
 	t.Cleanup(func() { idx = origIdx })
 
 	// Own server that closes over the locally-set idx.
@@ -356,7 +359,7 @@ func TestGetDoc_EmptyIndex(t *testing.T) {
 // IsError=true and the error text contains the invalid value and valid hints.
 func TestGetDoc_InvalidMatch(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{
@@ -384,7 +387,7 @@ func TestGetDoc_InvalidMatch(t *testing.T) {
 func TestGetDoc_TagsAsString(t *testing.T) {
 	dir := setupFixtureDir(t)
 	origIdx := idx
-	idx = index.New(dir)
+	idx = index.New(dir, scanner.ScanOptions{})
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
@@ -423,7 +426,7 @@ func TestGetDoc_TagsAsString(t *testing.T) {
 // get_doc response must never start with '/'.
 func TestGetDoc_FilePathRelative(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{"topic": "reference"})
@@ -461,7 +464,7 @@ func TestGetDoc_LiveRead(t *testing.T) {
 		t.Fatalf("rewrite guide.md: %v", err)
 	}
 
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_doc", map[string]any{"topic": "guide"})
@@ -499,7 +502,7 @@ func TestGetDoc_LiveRead(t *testing.T) {
 // TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
 func TestNewFixtureServerToolsCount(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	tools, err := srv.Client().ListTools(context.Background(), mcp.ListToolsRequest{})
@@ -527,7 +530,7 @@ func TestNewFixtureServerToolsCount(t *testing.T) {
 
 func TestValidateDoc_BundleValid(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "validate_doc", nil)
@@ -549,7 +552,7 @@ func TestValidateDoc_BundleValid(t *testing.T) {
 
 func TestValidateDoc_BundleInvalid(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "validate_doc", nil)
@@ -571,7 +574,7 @@ func TestValidateDoc_BundleInvalid(t *testing.T) {
 
 func TestValidateDoc_SingleFileDoc(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "validate_doc", map[string]any{"file_path": "guide.md"})
@@ -595,7 +598,7 @@ func TestValidateDoc_SingleFileDoc(t *testing.T) {
 
 func TestValidateDoc_SingleFileReserved(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "validate_doc", map[string]any{"file_path": "index.md"})
@@ -634,7 +637,7 @@ func TestValidateDoc_SingleFileReserved(t *testing.T) {
 
 func TestGetIndex_FullTree(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_index", nil)
@@ -656,7 +659,7 @@ func TestGetIndex_FullTree(t *testing.T) {
 
 func TestGetIndex_Subtree(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_index", nil)
@@ -673,7 +676,7 @@ func TestGetIndex_Subtree(t *testing.T) {
 
 func TestGetIndex_RootPath(t *testing.T) {
 	dir := setupFixtureDir(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_index", map[string]any{"path": "."})
@@ -717,7 +720,7 @@ func setupLogFixture(t *testing.T) string {
 
 func TestGetLog_ValidEntries(t *testing.T) {
 	dir := setupLogFixture(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_log", nil)
@@ -752,7 +755,7 @@ func TestGetLog_MissingLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	result := callTool(t, srv, "get_log", nil)
@@ -777,7 +780,7 @@ func TestGetLog_MissingLog(t *testing.T) {
 
 func TestGetLog_Filtered(t *testing.T) {
 	dir := setupLogFixture(t)
-	srv := newFixtureServer(t, dir)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
 	defer srv.Close()
 
 	// Filter by action=Update.

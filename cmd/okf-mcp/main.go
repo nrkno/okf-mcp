@@ -16,6 +16,7 @@ import (
 	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
 	"github.com/nrkno/plattform-okf-mcp/internal/matcher"
 	"github.com/nrkno/plattform-okf-mcp/internal/parser"
+	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
 
@@ -497,7 +498,7 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "okf-mcp: serving %s\n", cwd)
 
-	idx = index.New(cwd)
+	idx = index.New(cwd, scanner.ScanOptions{})
 
 	s := server.NewMCPServer("okf-mcp", "1.0.0",
 	server.WithInstructions(
@@ -530,7 +531,7 @@ func runValidate(path string) {
 		fmt.Fprintf(os.Stderr, "okf-mcp: invalid path: %v\n", err)
 		os.Exit(2)
 	}
-	localIdx := index.New(absPath)
+	localIdx := index.New(absPath, scanner.ScanOptions{})
 	if err := localIdx.Rebuild(); err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: scan error: %v\n", err)
 		os.Exit(2)
