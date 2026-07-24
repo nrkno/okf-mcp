@@ -215,6 +215,94 @@ func TestListDocs_Count(t *testing.T) {
 	}
 }
 
+
+// setupMultiBundleFixture creates a fixture with two OKF bundles:
+//
+//	docs/index.md                     (reserved, conformant — no frontmatter)
+//	docs/arch.md                      (doc, type: Architecture)
+//	.opencode/architecture/index.md   (reserved, conformant — no frontmatter)
+//	.opencode/architecture/design.md  (doc, type: Architecture)
+//
+// Tests using this fixture must pass scanner.ScanOptions{EnableHidden: true}
+// to newFixtureServer to traverse the .opencode/ subdirectory.
+func setupMultiBundleFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	mkBundle := func(relBundleDir string, archTitle, archDescription, archType string, archTags []string) {
+		t.Helper()
+		bundleDir := filepath.Join(dir, relBundleDir)
+		if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", relBundleDir, err)
+		}
+		// Conformant index.md: no frontmatter.
+		if err := os.WriteFile(filepath.Join(bundleDir, "index.md"), nil, 0o644); err != nil {
+			t.Fatalf("write %s/index.md: %v", relBundleDir, err)
+		}
+		arch := relBundleDir + "/arch.md"
+		if err := os.WriteFile(filepath.Join(dir, arch),
+			[]byte(frontmatter(archType, archTitle, archDescription, archTags)), 0o644); err != nil {
+			t.Fatalf("write %s: %v", arch, err)
+		}
+	}
+
+	mkBundle("docs", "Architecture", "System design", "Architecture", []string{"design"})
+	mkBundle(".opencode/architecture", "API Design", "API patterns", "Architecture", []string{"api"})
+
+	return dir
+}
+
+// TestListDocs_BundleField verifies that each entry in list_docs carries a
+// correct bundle field per the walk-up rule (I-17). Hidden-bundle docs are
+// only visible with EnableHidden: true.
+
+// TestListDocs_BundleField verifies that each entry in list_docs carries a
+// correct bundle field per the walk-up rule (I-17). Hidden-bundle docs are
+// only visible with EnableHidden: true.
+func TestListDocs_BundleField(t *testing.T) {
+	dir := setupMultiBundleFixture(t)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{EnableHidden: true})
+	defer srv.Close()
+
+	result := callTool(t, srv, "list_docs", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var docs []map[string]any
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &docs); err != nil {
+		t.Fatalf("unmarshal docs: %v", err)
+	}
+
+	if len(docs) != 2 {
+		t.Fatalf("got %d docs, want 2: %v", len(docs), docs)
+	}
+
+	bundleByPath := make(map[string]string, len(docs))
+	for _, doc := range docs {
+		fp, _ := doc["file_path"].(string)
+		if fp == "" {
+			t.Errorf("doc missing file_path: %v", doc)
+		}
+		bundle, _ := doc["bundle"].(string)
+		if bundle == "" {
+			t.Errorf("doc %q missing bundle field: %v", fp, doc)
+		}
+		bundleByPath[fp] = bundle
+	}
+
+	if got, want := bundleByPath["docs/arch.md"], "docs"; got != want {
+		t.Errorf("docs/arch.md bundle: got %q, want %q", got, want)
+	}
+	if got, want := bundleByPath[".opencode/architecture/arch.md"], ".opencode/architecture"; got != want {
+		t.Errorf(".opencode/architecture/arch.md bundle: got %q, want %q", got, want)
+	}
+}
+
+// TestGetDoc_ByTopic verifies get_doc retrieves guide.md for topic="guide",
+// that file_path is relative (I-1), and that content is the markdown body
+// only — no leading frontmatter block.
+
 // TestGetDoc_ByTopic verifies get_doc retrieves guide.md for topic="guide",
 // that file_path is relative (I-1), and that content is the markdown body
 // only — no leading frontmatter block.
@@ -495,6 +583,49 @@ func TestGetDoc_LiveRead(t *testing.T) {
 	}
 }
 
+
+// TestGetDoc_BundleField verifies that get_doc response includes the bundle
+// field per the walk-up rule (I-17), exercised against docs in both a visible
+// bundle and a hidden bundle (the latter requires EnableHidden: true).
+func TestGetDoc_BundleField(t *testing.T) {
+	dir := setupMultiBundleFixture(t)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{EnableHidden: true})
+	defer srv.Close()
+
+	// Doc in hidden bundle — the primary motivation.
+	result := callTool(t, srv, "get_doc", map[string]any{"topic": "API Design"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &payload); err != nil {
+		t.Fatalf("unmarshal get_doc: %v", err)
+	}
+	if got, want := payload["bundle"], ".opencode/architecture"; got != want {
+		t.Errorf("hidden-bundle get_doc bundle: got %v, want %v", got, want)
+	}
+	if got, want := payload["file_path"], ".opencode/architecture/arch.md"; got != want {
+		t.Errorf("hidden-bundle get_doc file_path: got %v, want %v", got, want)
+	}
+
+	// Doc in visible bundle — the regression guard.
+	result = callTool(t, srv, "get_doc", map[string]any{"topic": "Architecture"})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &payload); err != nil {
+		t.Fatalf("unmarshal get_doc: %v", err)
+	}
+	if got, want := payload["bundle"], "docs"; got != want {
+		t.Errorf("visible-bundle get_doc bundle: got %v, want %v", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tool count
+// ---------------------------------------------------------------------------
+
+// TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
 // ---------------------------------------------------------------------------
 // Tool count
 // ---------------------------------------------------------------------------
@@ -693,6 +824,96 @@ func TestGetIndex_RootPath(t *testing.T) {
 	}
 }
 
+
+// TestGetIndex_BundleOnLeaves verifies that get_index leaf nodes carry the
+// bundle field per the walk-up rule (I-17), while directory nodes do NOT.
+// Also exercises the `path` parameter into a hidden bundle (critic m5).
+func TestGetIndex_BundleOnLeaves(t *testing.T) {
+	dir := setupMultiBundleFixture(t)
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{EnableHidden: true})
+	defer srv.Close()
+
+	// Full tree — every leaf must have a bundle; every directory must not.
+	result := callTool(t, srv, "get_index", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var tree index.TreeNode
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &tree); err != nil {
+		t.Fatalf("unmarshal tree: %v", err)
+	}
+
+	leafBundleByPath := make(map[string]string)
+	var walk func(n *index.TreeNode)
+	walk = func(n *index.TreeNode) {
+		switch n.Type {
+		case "file", "reserved":
+			if n.Bundle == "" {
+				t.Errorf("leaf %q (type=%s) missing bundle field", n.Path, n.Type)
+			}
+			leafBundleByPath[n.Path] = n.Bundle
+		case "directory":
+			if n.Bundle != "" {
+				t.Errorf("directory %q unexpectedly has bundle=%q (leaves only)", n.Path, n.Bundle)
+			}
+			for i := range n.Children {
+				walk(&n.Children[i])
+			}
+		}
+	}
+	walk(&tree)
+
+	if got, want := leafBundleByPath["docs/arch.md"], "docs"; got != want {
+		t.Errorf("docs/arch.md leaf bundle: got %q, want %q", got, want)
+	}
+	if got, want := leafBundleByPath[".opencode/architecture/arch.md"], ".opencode/architecture"; got != want {
+		t.Errorf(".opencode/architecture/arch.md leaf bundle: got %q, want %q", got, want)
+	}
+
+	// path parameter into a hidden bundle (critic m5) — drills into
+	// .opencode/architecture via findSubtree and confirms the returned subtree.
+	result = callTool(t, srv, "get_index", map[string]any{"path": ".opencode/architecture"})
+	if result.IsError {
+		t.Fatalf("get_index with path into hidden bundle failed: %s", getTextContent(t, result))
+	}
+	var sub index.TreeNode
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &sub); err != nil {
+		t.Fatalf("unmarshal subtree: %v", err)
+	}
+	if sub.Name != "architecture" {
+		t.Errorf("subtree root name: got %q, want %q", sub.Name, "architecture")
+	}
+	if sub.Type != "directory" {
+		t.Errorf("subtree root type: got %q, want directory", sub.Type)
+	}
+	// The hidden bundle's directory node must NOT carry bundle itself.
+	if sub.Bundle != "" {
+		t.Errorf("hidden-bundle directory node carries bundle=%q (leaves only)", sub.Bundle)
+	}
+	// Walk subtree — find the leaf arch.md and confirm its bundle.
+	var archBundle string
+	var find func(n *index.TreeNode)
+	find = func(n *index.TreeNode) {
+		if n.Type == "file" && filepath.Base(n.Path) == "arch.md" {
+			archBundle = n.Bundle
+			return
+		}
+		for i := range n.Children {
+			find(&n.Children[i])
+		}
+	}
+	find(&sub)
+	if got, want := archBundle, ".opencode/architecture"; got != want {
+		t.Errorf("hidden subtree arch.md leaf bundle: got %q, want %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// get_log tests
+// ---------------------------------------------------------------------------
+
+// setupLogFixture creates a fixture with a log.md containing valid log entries.
 // ---------------------------------------------------------------------------
 // get_log tests
 // ---------------------------------------------------------------------------

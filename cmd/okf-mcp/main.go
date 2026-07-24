@@ -109,6 +109,7 @@ func listDocsHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolRes
 			"description": doc.Description,
 			"tags":        doc.Tags,
 			"file_path":   doc.FilePath,
+			"bundle":      doc.Bundle,
 		}
 	}
 	out, err := json.Marshal(entries)
@@ -199,6 +200,7 @@ func getDocHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolRes
 		"tags":        doc.Tags,
 		"title":       doc.Title,
 		"description": doc.Description,
+		"bundle":      doc.Bundle,
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
