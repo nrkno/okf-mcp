@@ -118,13 +118,15 @@ Claude Desktop does not use a separate permission allow-list — registering the
 
 `okf-mcp` uses the MCP `instructions` field (set via `server.WithInstructions(...)` in mcp-go) to inject usage guidance into the agent system prompt on every session start. opencode reads this field from the server's `initialize` response and includes it automatically.
 
-The injected instructions tell the agent to:
+The injected instructions frame okf-mcp as the primary way to find documentation, code definitions, architecture design, decision records, and reports — and tell the agent to use the server before reading files directly. They describe each tool:
 
-1. Call `list_tags` first to discover available topics and tags.
-2. Use `get_doc(topic)` to retrieve the relevant document.
-3. Use `validate_doc` to check document conformance.
-4. Use `get_index` to browse the documentation tree structure.
-5. Use `get_log` to access structured change log entries.
-6. Prefer these tools over reading files directly when looking for documentation.
+1. **`get_index`** — browse the tree and discover which OKF bundles are in scope.
+2. **`list_docs`** — list all indexed documents (each tagged with its `bundle`).
+3. **`list_tags`** — discover available topics and tags across all bundles.
+4. **`get_doc(topic, tags?)`** — retrieve a document, scored by title/tag/description match.
+5. **`validate_doc`** — check document conformance for a single file or the whole bundle.
+6. **`get_log`** — access structured change log entries (each tagged with its source `log.md` path).
+
+The instructions also mention that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
 
 No AGENTS.md entry is needed. No additional configuration beyond the server registration and permissions above is required.
