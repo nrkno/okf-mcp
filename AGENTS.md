@@ -14,9 +14,9 @@ Entry point: `cmd/okf-mcp/main.go` — wires the six MCP tool handlers as packag
 
 | Package            | Role                                                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `internal/scanner` | `ScanAll(dir)` — walks `*.md` recursively, applies skip rules (hidden dirs, non-`.md` files); returns indexable and reserved file paths   |
+| `internal/scanner` | `ScanAll(dir, opts)` — walks `*.md` recursively, applies skip rules (hidden dirs per `ScanOptions.EnableHidden`, non-`.md` files); returns indexable and reserved file paths   |
 | `internal/parser`  | `Parse(path)` — extracts YAML frontmatter into `Doc` struct; `DetectFrontmatter` is the single source of truth (I-15)                    |
-| `internal/index`   | `Index.Rebuild()` — calls scanner+parser, stores relative paths, mutex-guarded; `Docs()` + `Tags()` + `Reserved()` + `Tree()` for reads  |
+| `internal/index`   | `Index.Rebuild()` — calls scanner+parser, stores relative paths, computes the `Bundle` field per doc/reserved file (I-17), mutex-guarded; `Docs()` + `Tags()` + `Reserved()` + `Tree()` for reads  |
 | `internal/matcher` | `Score()` + `FindBest()` — weighted token scoring (title 3×, tags 2×, description 1×); AND/OR tag filter                                  |
 | `internal/validator` | `ValidateDoc()`, `ValidateReserved()`, `ValidateBundle()` — frontmatter conformance checks (E0–E3, W1–W4, N1)                           |
 | `internal/logparser` | `Parse(body)` — parses log.md body into structured `LogEntry` slices (date, action, target, detail)                                     |
@@ -33,18 +33,21 @@ Every change must preserve these. When a change would break one, stop and escala
 - **I-2**: `get_doc` and `get_log` content is live-read from disk (`os.ReadFile` in handlers, not cached in `Rebuild`)
 - **I-3**: Files missing the `type` field are silently skipped — never indexed
 - **I-4**: `index.md` and `log.md` are never indexed (scanner basename skip-list); surfaced via `Reserved()` (I-8)
-- **I-5**: Hidden directories (names starting with `.`) are never traversed
+- **I-5**: Hidden directories (names starting with `.`) are skipped by default; `--enable-hidden` opts in to traversing them, except VCS internals (`.git`, `.hg`, `.svn`) which are always skipped
 - **I-6**: `get_doc` is deterministic — tie-break by alphabetical `file_path` ascending
 - **I-7**: Zero-doc startup does not crash — returns empty results, not panic
 - **I-8**: `index.md` and `log.md` appear in `Reserved()` but never in `Docs()`
 - **I-9**: `validate_doc` returns zero errors for a conformant bundle
 - **I-10**: `validate_doc` returns at least one error for a file with frontmatter but no `type` field
 - **I-11**: `get_index` returns a tree whose leaves are indexed `.md` files and reserved files
-- **I-12**: `get_log` returns entries in reverse-chronological order with parsed date, action, and target
+- **I-12**: `get_log` returns entries from all `log.md` files in the index, merged in reverse-chronological order, each tagged with `source` (relative path to its log.md); ties broken by source ascending, then document order
 - **I-13**: `--validate` exits 0 on conformant, 1 on errors, 2 on infra failure; does not start MCP server
 - **I-14**: Pre-commit hook invokes `okf-mcp --validate` and blocks commit on exit 1
 - **I-15**: `parser.DetectFrontmatter` is the single source of truth for frontmatter detection
 - **I-16**: `ValidateReserved` applies only E3; `ValidateDoc` applies only E0/E1/E2/W1–W4/N1
+- **I-17**: Every document response (`list_docs`, `get_doc`, `get_index` leaf) includes a `bundle` field: the relative path to the nearest ancestor directory containing `index.md`, or the file's immediate parent directory if no ancestor has one
+- **I-18**: `--enable-hidden` defaults to off. When off, scanner behavior is byte-identical to pre-flag behavior (all dot-dirs skipped)
+- **I-19**: VCS directories (`.git`, `.hg`, `.svn`) are always skipped regardless of `--enable-hidden`
 
 ---
 
@@ -122,7 +125,7 @@ These docs are served by the `okf-mcp` server itself when running in this repo �
 
 | Document                | Content                                                               |
 | ----------------------- | --------------------------------------------------------------------- |
-| `docs/architecture.md`  | Package responsibilities, invariants I-1→I-16, scoring model          |
+| `docs/architecture.md`  | Package responsibilities, invariants I-1→I-19, scoring model          |
 | `docs/tools.md`         | `list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log` — params, response shapes, errors |
 | `docs/configuration.md` | MCP client setup, permission strings for all six tools, opencode/Claude examples |
 | `docs/okf-standard.md`  | OKF frontmatter schema, type vocabulary, conventions                  |

@@ -214,7 +214,6 @@ func TestListDocs_Count(t *testing.T) {
 	}
 }
 
-
 // setupMultiBundleFixture creates a fixture with two OKF bundles:
 //
 //	docs/index.md                     (reserved, conformant — no frontmatter)
@@ -250,7 +249,6 @@ func setupMultiBundleFixture(t *testing.T) string {
 
 	return dir
 }
-
 
 // TestListDocs_BundleField verifies that each entry in list_docs carries a
 // correct bundle field per the walk-up rule (I-17). Hidden-bundle docs are
@@ -294,7 +292,6 @@ func TestListDocs_BundleField(t *testing.T) {
 		t.Errorf(".opencode/architecture/arch.md bundle: got %q, want %q", got, want)
 	}
 }
-
 
 // TestGetDoc_ByTopic verifies get_doc retrieves guide.md for topic="guide",
 // that file_path is relative (I-1), and that content is the markdown body
@@ -576,7 +573,6 @@ func TestGetDoc_LiveRead(t *testing.T) {
 	}
 }
 
-
 // TestGetDoc_BundleField verifies that get_doc response includes the bundle
 // field per the walk-up rule (I-17), exercised against docs in both a visible
 // bundle and a hidden bundle (the latter requires EnableHidden: true).
@@ -812,7 +808,6 @@ func TestGetIndex_RootPath(t *testing.T) {
 	}
 }
 
-
 // TestGetIndex_BundleOnLeaves verifies that get_index leaf nodes carry the
 // bundle field per the walk-up rule (I-17), while directory nodes do NOT.
 // Also exercises the `path` parameter into a hidden bundle (critic m5).
@@ -922,7 +917,6 @@ func setupLogFixture(t *testing.T) string {
 	return dir
 }
 
-
 func TestGetLog_ValidEntries(t *testing.T) {
 	dir := setupLogFixture(t)
 	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
@@ -957,7 +951,6 @@ func TestGetLog_ValidEntries(t *testing.T) {
 		t.Errorf("entries[0].Source: got %q, want %q", got, want)
 	}
 }
-
 
 func TestGetLog_Filtered(t *testing.T) {
 	dir := setupLogFixture(t)
@@ -1020,7 +1013,6 @@ func TestGetLog_Filtered(t *testing.T) {
 		t.Fatalf("limit=1: got %d entries, want 1", len(entries))
 	}
 }
-
 
 // TestGetLog_MultiSource verifies multi-bundle log aggregation. Two log.md
 // files (one visible, one hidden) are merged, each entry is tagged with its
@@ -1121,6 +1113,50 @@ func TestGetLog_MultiSource(t *testing.T) {
 	}
 }
 
+// TestGetLog_SameSourceTiebreak exercises the tertiary tiebreak (document
+// order) guaranteed by sort.SliceStable: when two entries share both date
+// AND source, the one that appears first in log.md must come first in the
+// response. This complements the secondary tiebreak (source asc) covered by
+// TestGetLog_MultiSource.
+func TestGetLog_SameSourceTiebreak(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "guide.md"),
+		[]byte(frontmatter("guide", "Guide", "A guide", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Two entries on the same date, in this order: First, Second.
+	logContent := "---\ntype: Log\ntitle: Log\ndescription: Change log\ntags:\n  - log\n---\n" +
+		"## 2026-07-23\n\n**Update**: `[guide.md](/guide.md)` — First\n\n" +
+		"**Update**: `[guide.md](/guide.md)` — Second\n"
+	if err := os.WriteFile(filepath.Join(dir, "log.md"), []byte(logContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
+	defer srv.Close()
+
+	result := callTool(t, srv, "get_log", nil)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", getTextContent(t, result))
+	}
+
+	var resp struct {
+		Entries []logEntryJSON `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(getTextContent(t, result)), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(resp.Entries))
+	}
+	// Document order is preserved: "First" precedes "Second".
+	if !strings.Contains(resp.Entries[0].Detail, "First") {
+		t.Errorf("entries[0] detail: got %q, want detail containing 'First' (document order)", resp.Entries[0].Detail)
+	}
+	if !strings.Contains(resp.Entries[1].Detail, "Second") {
+		t.Errorf("entries[1] detail: got %q, want detail containing 'Second' (document order)", resp.Entries[1].Detail)
+	}
+}
 
 // TestGetLog_SingleSource verifies single-bundle log behavior: one log.md
 // → entries each carry the source path → top-level "source" field is absent
@@ -1178,7 +1214,6 @@ func TestGetLog_SingleSource(t *testing.T) {
 		t.Errorf("response has top-level 'source' field; should be removed (per-entry only): %v", generic)
 	}
 }
-
 
 // TestGetLog_NoLogMd verifies the empty-index response shape: empty entries
 // array and the "no log.md found" note. Top-level "source" must be absent.
@@ -1271,6 +1306,43 @@ func TestCLI_Validate_WithPath(t *testing.T) {
 	exit := runBinary(t, bin, dir, "--validate", "--path", "docs")
 	if exit != 0 {
 		t.Errorf("exit code: got %d, want 0", exit)
+	}
+}
+
+// TestCLI_Validate_HiddenBundle exercises the --enable-hidden flag through
+// the --validate path. With the flag set, the hidden .opencode/architecture/
+// bundle is indexed and its conformant docs pass validation. Without the flag
+// the hidden dir is skipped, so the validator sees zero files.
+func TestCLI_Validate_HiddenBundle(t *testing.T) {
+	dir := t.TempDir()
+	hiddenDir := filepath.Join(dir, ".opencode", "architecture")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Conformant index.md: no frontmatter (I-4 / E3).
+	if err := os.WriteFile(filepath.Join(hiddenDir, "index.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Conformant doc.
+	if err := os.WriteFile(filepath.Join(hiddenDir, "design.md"),
+		[]byte(frontmatter("Architecture", "API Design", "API patterns", []string{"api"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bin := buildBinary(t)
+
+	// With --enable-hidden: hidden bundle is validated; no errors expected.
+	exit := runBinary(t, bin, dir, "--validate", "--enable-hidden", "--path", dir)
+	if exit != 0 {
+		t.Errorf("with --enable-hidden: exit code: got %d, want 0", exit)
+	}
+
+	// Without --enable-hidden: hidden dir is skipped, so the index is empty
+	// at this path. Validate at the parent (which has no .md files either),
+	// so 0 files are validated and exit 0 (no errors).
+	exit = runBinary(t, bin, dir, "--validate", "--path", dir)
+	if exit != 0 {
+		t.Errorf("without --enable-hidden: exit code: got %d, want 0", exit)
 	}
 }
 
