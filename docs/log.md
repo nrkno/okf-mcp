@@ -3,10 +3,32 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-07-23T00:00:00Z
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-08-31
+
+**Update**: `cmd/okf-mcp/main.go` — `WithInstructions` graph sentence rewritten as a workflow guide; updated `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, and `graph_context` tool descriptions to emphasize when to use each tool and how to discover relationship types from the active profile.
+**Update**: `docs/tools.md`, `docs/configuration.md`, `docs/architecture.md` — synced graph tool descriptions and `WithInstructions` guidance.
+**Update**: `internal/profile/profile.go` — empty/nil `allowed_source_types` or `allowed_target_types` on a relationship is now treated as "any type allowed" (wildcard), matching the intuitive semantics for minimal profiles.
+**Update**: `internal/graph/graph.go` — the `superseded_deps` integrity check identifies supersession relationships from profile invariants whose `relationship` name contains `"supersede"` (case-insensitive) and whose `direction` is `"outgoing"`. This works with the design's canonical P3 shape (`max: 1`) as well as `max: 0` and any other cardinality, and avoids misclassifying non-supersession relationships that happen to have a bounded outgoing cardinality. If no such invariant is present, the check is skipped to avoid false negatives.
+**Update**: `internal/graph/graph_test.go` — added `TestBuildSupersededRels` covering canonical `max: 1`, `max: 0`, case-insensitive match, supersede-variant names, and non-supersession exclusions; updated renamed-relationship supersession test to use a relationship name containing `"supersede"`; added `TestIntegrity_SupersededMaxOne` for the canonical P3 shape.
+**Note**: `docs/architecture/design/graph-projection.md` still describes the old hard-coded `"supersedes"` superseded-dependency behavior. Edits to `docs/architecture/**` are not permitted in this session; update when the directory is writable.
+**Update**: `AGENTS.md` — recorded invariants I-20 through I-31; added `internal/graph`, `internal/linkextract`, and `internal/profile` to the package table; updated overview and key-documentation summary to reflect thirteen tools.
+**Update**: `docs/architecture.md` — documented `internal/graph`, `internal/linkextract`, and `internal/profile`; added the graph-projection data model and profile-loading sections; extended the invariants table to I-1→I-31.
+**Update**: `docs/tools.md` — documented `graph_integrity`, `graph_coverage`, and `graph_context`; updated frontmatter and intro to reference all thirteen tools and seven graph tools.
+**Update**: `docs/configuration.md` — added permission strings for `graph_integrity`, `graph_coverage`, and `graph_context`; updated auto-registration tool list to all thirteen tools.
+**Update**: `docs/index.md` — updated the MCP Tools Reference link to note all thirteen tools and the seven graph tools.
+**Note**: `docs/architecture/design/graph-projection.md` states that the `internal/index.New()` signature change affects 9 call sites, but the actual count is 29. Flagged here per scope; the design doc was not edited.
+**Creation**: `graph_concept` MCP tool — returns metadata and edge counts for a single concept by relative `file_path`.
+**Creation**: `graph_relationships` MCP tool — returns outgoing and incoming relationships for a concept, with optional `direction` and `type` filters.
+**Creation**: `graph_trace` MCP tool — BFS traversal of upstream or downstream relationships from a starting concept, with optional `type` filter and `max_depth` clamped to 1–20.
+**Creation**: `graph_search` MCP tool — text search over indexed concepts using the existing weighted-token scorer, with optional `type`/`tags` filters and `limit` clamped to 1–100.
+**Update**: `cmd/okf-mcp/main.go` — added `--profile` CLI flag; profile loading follows the order explicit flag → auto-discovered `.okf-profile.yaml` in scan root → default profile. An invalid explicit path exits code 2; an invalid discovered file logs a warning and falls back to default. Profile selection is always logged to stderr.
+**Update**: `docs/tools.md` — documented the four new graph navigation tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`).
+**Update**: `docs/configuration.md` — documented the `--profile` flag, profile resolution order, exit-code behaviour, and added the four new graph tool permission strings.
 
 ## 2026-07-23
 

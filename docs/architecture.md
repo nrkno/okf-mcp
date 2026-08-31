@@ -1,20 +1,20 @@
 ---
 type: Architecture
 title: Architecture
-description: Internal structure of okf-mcp — packages, design invariants, the weighted scoring model used by get_doc, and the multi-bundle support (--enable-hidden, bundle field, multi-log aggregation).
-tags: [architecture, scanner, parser, index, matcher, validator, logparser, mcp, scoring, multi-bundle, hidden]
-timestamp: 2026-07-23T00:00:00Z
+description: Internal structure of okf-mcp — packages, design invariants, the weighted scoring model used by get_doc, the multi-bundle support (--enable-hidden, bundle field, multi-log aggregation), and the graph projection over OKF documents (--profile, relationship classification, link extraction).
+tags: [architecture, scanner, parser, index, matcher, validator, logparser, graph, linkextract, profile, mcp, scoring, multi-bundle, hidden, projection]
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # Architecture
 
 ## What okf-mcp does
 
-`okf-mcp` is a stdio MCP server that makes OKF-conformant documentation queryable by agents. On every tool call it scans the process working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves six tools — `list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log` — so agents can look up platform documentation without traversing the file tree themselves. It also provides a `--validate` CLI flag and a pre-commit hook for validating doc conformance.
+`okf-mcp` is a stdio MCP server that makes OKF-conformant documentation queryable by agents. On every tool call it scans the process working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves thirteen tools — six core tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) and seven graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) — so agents can look up platform documentation and navigate relationships between documents without traversing the file tree themselves. It also provides `--validate` and `--profile` CLI flags and a pre-commit hook for validating doc conformance.
 
 ## Internal packages
 
-The server is structured as six internal packages under `internal/`, wired together in `cmd/okf-mcp/main.go`.
+The server is structured as nine internal packages under `internal/`, wired together in `cmd/okf-mcp/main.go`.
 
 ### `internal/scanner`
 
@@ -54,11 +54,12 @@ The `DetectFrontmatter(content)` function is the single source of truth for fron
 Owns the in-memory doc slice and exposes operations for the MCP tools:
 
 - `New(dir string, opts scanner.ScanOptions) *Index` — creates an empty index rooted at `dir` with the given scan options.
-- `Rebuild() error` — calls `scanner.ScanAll` (with the stored `opts`), then parser on each file, relativises paths to the scan root, computes the bundle field for each doc and reserved file (I-17), and atomically replaces the internal doc and reserved slices under a `sync.Mutex`.
+- `Rebuild() error` — calls `scanner.ScanAll` (with the stored `opts`), then parser on each file, relativises paths to the scan root, computes the bundle field for each doc and reserved file (I-17), builds the graph projection via `graph.Build()` (I-20 through I-31), and atomically replaces the internal doc, reserved, and graph slices under a `sync.Mutex`.
 - `Docs() []parser.Doc` — returns a defensive copy of the current slice (safe for callers to mutate).
 - `Tags() []string` — returns a sorted, deduplicated list of all tags across all docs.
 - `Reserved() []ReservedFile` — returns reserved file metadata (index.md, log.md) from the last Rebuild (I-8). Each entry carries a `Bundle` field. Reserved files never appear in `Docs()` (I-4).
 - `Tree() TreeNode` — returns the bundle tree built from docs and reserved files (I-11). Leaf nodes (files and reserved) carry a `Bundle` field; directory nodes do not.
+- `Graph() *graph.Graph` — returns the current graph projection built during the last Rebuild.
 
 Per-file parse errors are logged to stderr and skipped; they do not abort `Rebuild`. Zero conformant docs is logged as a warning but is not an error (invariant I-7).
 
@@ -86,9 +87,45 @@ Parses the body of `log.md` (after frontmatter) into structured `LogEntry` slice
 - Returns entries in document order; the `get_log` handler sorts them reverse-chronologically after merging across all `log.md` files (see [Multi-bundle support](#multi-bundle-support) below).
 - Unparseable lines are skipped; entries with missing fields get empty strings.
 
+### `internal/graph`
+
+Builds and queries the directed graph projection over OKF documents.
+
+- `Build(docs []parser.Doc, dir string, prof *profile.Profile) *Graph` — reads each document body from disk, extracts links via `linkextract.Extract()`, classifies each link against the profile, resolves target paths, populates nodes and adjacency maps, and records dangling references.
+- `Concept(filePath string) (*Node, bool)` — looks up a concept by relative path.
+- `Search(query, typeFilter, tagFilter)` — scored text search over concepts using `internal/matcher`.
+- `Outgoing(filePath, typeFilter)` / `Incoming(filePath, typeFilter)` — edge lookups.
+- `Trace(filePath, direction, typeFilter, maxDepth)` — BFS traversal up or down the graph.
+- `Integrity()` — structural checks: dangling references, orphan concepts, profile type/cardinality violations, superseded dependencies.
+- `Coverage(sourceType, targetType, relType)` — bidirectional BFS checking whether source-type concepts reach target-type concepts through a relationship.
+- `Context(filePath, depth, maxResults)` — bounded neighborhood slice around a concept.
+
+The graph is derived entirely from OKF source documents (I-20). It is rebuilt on every `Index.Rebuild()` and swapped atomically with the doc slice under the same mutex.
+
+### `internal/linkextract`
+
+Extracts Markdown links from document body content using AST parsing.
+
+- `Extract(body string, docDir string, corpusRoot string) []ExtractedLink` — parses the Markdown body with `goldmark`, walks the AST for `Link` nodes, determines the nearest ancestor heading, resolves relative targets against `docDir`, and verifies the resolved path remains inside `corpusRoot` (I-30).
+- Skips links inside code blocks, code spans, HTML blocks, escaped links, external URLs, anchor-only targets, and mailto links.
+- Heading normalization (lowercase, strip formatting, collapse whitespace) is applied before profile matching.
+
+A link whose resolved path escapes `corpusRoot` is silently dropped — it is not returned, not recorded as a node, edge, or dangling reference (I-30).
+
+### `internal/profile`
+
+Loads and validates OKF relationship-profile YAML files.
+
+- `Load(path string) (*Profile, error)` — loads a profile from disk and validates it (heading-alias uniqueness per I-31, required fields, cardinality consistency, direction/severity values).
+- `Default() *Profile` — returns an empty profile; all links classify as `untyped`.
+- `ClassifyHeading(heading string) (relName string, found bool)` — maps a normalized heading to a relationship type.
+- `InverseName(relName string) string` — returns the inverse relationship name, or `"referenced_by"` as fallback.
+
+Profile resolution order at startup: explicit `--profile` path → auto-discovered `.okf-profile.yaml` in the scan root → `profile.Default()`. An invalid explicit path exits code 2; an invalid auto-discovered file logs a warning and falls back to the default.
+
 ## Design invariants
 
-The nineteen invariants are the correctness contracts the implementation upholds and the integration tests verify:
+The thirty-one invariants are the correctness contracts the implementation upholds and the integration tests verify:
 
 | ID | Invariant |
 |----|-----------|
@@ -111,6 +148,18 @@ The nineteen invariants are the correctness contracts the implementation upholds
 | I-17 | Every document response (`list_docs`, `get_doc`, `get_index` leaf) includes a `bundle` field: the relative path to the nearest ancestor directory containing `index.md`, or the file's immediate parent directory if no ancestor has one. |
 | I-18 | `--enable-hidden` defaults to off. When off, the scanner behavior is byte-identical to pre-flag behavior (all dot-dirs skipped). |
 | I-19 | VCS directories (`.git`, `.hg`, `.svn`) are always skipped regardless of `--enable-hidden`. |
+| I-20 | Every node and edge in the graph is derived from an OKF source document. No graph mutation API exists. |
+| I-21 | Two consecutive `Rebuild`s on an identical corpus produce identical graph output (same nodes, same edges, same ordering). |
+| I-22 | Every node in the graph corresponds to an indexed document (one that passed the parser gate: has frontmatter with non-empty `type`). |
+| I-23 | Every edge endpoint references a valid indexed document or is recorded as a dangling reference with source file, raw target, and heading context. |
+| I-24 | For every edge A→B with type T, querying B's incoming relationships returns A with type `inverse(T)`. Inverse edges are derived, not stored as separate facts. |
+| I-25 | Links under unrecognized headings (no profile heading match) are recorded as `untyped` relationships, not discarded. |
+| I-26 | With no profile loaded, all relationships are `untyped`. Graph tools still function: navigation, search, trace, context all work with untyped edges. Integrity queries that depend on profile rules return empty results with a note that no profile is loaded. |
+| I-27 | All file paths in graph tool responses are relative to the scan root, consistent with I-1. |
+| I-28 | Graph tools handle zero-document and zero-edge corpora without panic. Empty graph returns empty results, not errors. |
+| I-29 | Every unresolvable link is recorded with: source file path, raw link target string, and the heading context under which it was found. |
+| I-30 | Every resolved Markdown path in the graph MUST remain inside the configured OKF scan root. Path traversal inputs such as `../../../../etc/passwd` MUST NOT escape the corpus root during link resolution, graph inspection, or any query operation. A link whose resolved path falls outside the scan root is silently dropped — not returned by the extractor, not recorded as a graph node, edge, or dangling reference. |
+| I-31 | No two relationship definitions in a loaded profile MAY share the same normalized heading alias. If two relationships claim the same alias, `profile.Load()` rejects the profile with a descriptive error naming the conflicting alias and the two relationship definitions involved. |
 
 ## Scoring model
 
@@ -126,9 +175,55 @@ The doc with the highest total score is returned. Scores of zero or below (after
 
 Tag filtering is applied before scoring: with `match=and` (the default) the doc must carry all `tags` values; with `match=or` at least one must match. Tag comparison is case-insensitive exact match.
 
+## Graph projection
+
+`okf-mcp` builds a rebuildable directed graph over OKF documents. Nodes are indexed documents; edges are Markdown links classified by the heading under which they appear. The graph is constructed during `Index.Rebuild()` and swapped atomically with the doc slice.
+
+### Graph data model
+
+| Element | Key fields | Description |
+|---------|-----------|-------------|
+| `Node` | `FilePath`, `Type`, `Title`, `Description`, `Tags`, `Bundle` | One node per indexed document (I-22). |
+| `Edge` (outgoing) | `Source`, `Target`, `Type`, `Heading`, `Line` | A link from `Source` to `Target` classified as `Type`. |
+| `Edge` (incoming) | `Source`, `Target`, `Type`, `Heading`, `Line`, `InverseOf` | Derived inverse edge: `Type` is `inverse(originalType)` and `InverseOf` points back to the original type (I-24). |
+| `DanglingRef` | `Source`, `Target`, `Heading`, `Line` | A link whose target does not resolve to an indexed document (I-23, I-29). |
+
+`Type` values come from profile heading classification. With no profile loaded, every edge is `"untyped"` (I-25, I-26). Profile-defined types include inverses: an outgoing `depends_on` edge produces an incoming `depended_on_by` edge.
+
+### Link extraction and classification
+
+`internal/linkextract.Extract()` parses the Markdown body with `goldmark`, finds `Link` nodes, records the nearest ancestor heading, and resolves the target path relative to the source document's directory. The extractor:
+
+- Skips links inside code blocks, code spans, HTML blocks, and escaped links.
+- Skips external URLs (`http://`, `mailto:`) and anchor-only targets (`#section`).
+- Verifies resolved paths remain inside the scan root (I-30); paths that escape are silently dropped.
+
+`internal/graph.Build()` then classifies each extracted link:
+
+1. Normalize the heading (lowercase, strip formatting, collapse whitespace).
+2. Look up the normalized heading in the loaded profile's `heading_aliases`.
+3. If found, use the relationship's canonical `name` as the edge type.
+4. If not found (or no profile loaded), use `"untyped"` (I-25).
+
+### Determinism and purity
+
+Two consecutive `Rebuild`s on the same corpus produce the same graph (I-21). The graph contains no nodes or edges that are not derived from OKF source documents (I-20), and every path in graph responses is relative to the scan root (I-27).
+
+### Profile loading
+
+Relationship classification is driven by an optional OKF relationship-profile YAML file. The `--profile <path>` flag loads a profile explicitly; if the flag is omitted, `okf-mcp` looks for `.okf-profile.yaml` in the scan root. If neither is found, `profile.Default()` is used and every edge is `"untyped"` (I-26).
+
+Profile resolution order:
+
+1. Explicit path from `--profile`.
+2. Auto-discovered `.okf-profile.yaml` in the scan root.
+3. Built-in default (empty) profile.
+
+An invalid explicit `--profile` path causes the server to exit with code 2 (consistent with I-13). An invalid auto-discovered file logs a warning to stderr and falls back to the default profile so the server can still start. Profile loading is always logged to stderr for visibility.
+
 ## `WithInstructions` auto-registration
 
-`main.go` registers the MCP server with a `WithInstructions(...)` option. The mcp-go library includes this string in the `initialize` response as the `instructions` field. MCP hosts that support this field (opencode does) inject it into the agent system prompt automatically on session start. The instructions frame okf-mcp as the primary way to find documentation, code definitions, architecture design, decision records, and reports — and direct the agent to use the server before reading files directly. They describe each tool: `get_index` to discover the tree and OKF bundles, `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` for scored document retrieval, `validate_doc` for conformance checking, and `get_log` for change log entries (each tagged with its source `log.md` path). The instructions also note that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`, while VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
+`main.go` registers the MCP server with a `WithInstructions(...)` option. The mcp-go library includes this string in the `initialize` response as the `instructions` field. MCP hosts that support this field (opencode does) inject it into the agent system prompt automatically on session start. The instructions frame okf-mcp as the primary way to find documentation, code definitions, architecture design, decision records, and reports — and direct the agent to use the server before reading files directly. They describe each tool: `get_index` to discover the tree and OKF bundles, `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` for scored document retrieval, `validate_doc` for conformance checking, and `get_log` for change log entries (each tagged with its source `log.md` path). They also describe the seven graph tools, including how to choose between `graph_search`, `graph_concept`, `graph_relationships`, `graph_trace`, `graph_context`, `graph_integrity`, and `graph_coverage`, and note that relationship types come from the active profile. The instructions also note that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`, while VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
 
 ## Why scan-on-every-call, not a file watcher
 

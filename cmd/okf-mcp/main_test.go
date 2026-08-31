@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
+	"github.com/nrkno/plattform-okf-mcp/internal/profile"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
@@ -86,13 +87,19 @@ func setupFixtureDir(t *testing.T) string {
 // newFixtureServer sets idx to a new index rooted at dir with the given
 // scan options (use scanner.ScanOptions{} for default behavior, or
 // scanner.ScanOptions{EnableHidden: true} for tests that exercise hidden
-// bundle directories), registers a t.Cleanup to restore idx, then starts an
-// mcptest.Server with all six production tools. The caller must defer srv.Close().
+// bundle directories), discovers any .okf-profile.yaml in dir, registers a
+// t.Cleanup to restore idx, then starts an mcptest.Server with all thirteen
+// production tools. The caller must defer srv.Close().
 func newFixtureServer(t *testing.T, dir string, opts scanner.ScanOptions) *mcptest.Server {
 	t.Helper()
 
+	prof, _, err := loadProfile(dir, "")
+	if err != nil {
+		t.Fatalf("load profile: %v", err)
+	}
+
 	origIdx := idx
-	idx = index.New(dir, opts)
+	idx = index.New(dir, opts, prof)
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
@@ -102,6 +109,13 @@ func newFixtureServer(t *testing.T, dir string, opts scanner.ScanOptions) *mcpte
 		server.ServerTool{Tool: validateDocTool, Handler: validateDocHandler},
 		server.ServerTool{Tool: getIndexTool, Handler: getIndexHandler},
 		server.ServerTool{Tool: getLogTool, Handler: getLogHandler},
+		server.ServerTool{Tool: graphConceptTool, Handler: graphConceptHandler},
+		server.ServerTool{Tool: graphRelationshipsTool, Handler: graphRelationshipsHandler},
+		server.ServerTool{Tool: graphTraceTool, Handler: graphTraceHandler},
+		server.ServerTool{Tool: graphSearchTool, Handler: graphSearchHandler},
+		server.ServerTool{Tool: graphIntegrityTool, Handler: graphIntegrityHandler},
+		server.ServerTool{Tool: graphCoverageTool, Handler: graphCoverageHandler},
+		server.ServerTool{Tool: graphContextTool, Handler: graphContextHandler},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -405,7 +419,7 @@ func TestGetDoc_NoMatch(t *testing.T) {
 // Constraint 4: owns its idx and its mcptest.NewServer. NOT t.Parallel().
 func TestGetDoc_EmptyIndex(t *testing.T) {
 	origIdx := idx
-	idx = index.New(t.TempDir(), scanner.ScanOptions{}) // empty dir — zero .md files
+	idx = index.New(t.TempDir(), scanner.ScanOptions{}, profile.Default()) // empty dir — zero .md files
 	t.Cleanup(func() { idx = origIdx })
 
 	// Own server that closes over the locally-set idx.
@@ -465,7 +479,7 @@ func TestGetDoc_InvalidMatch(t *testing.T) {
 func TestGetDoc_TagsAsString(t *testing.T) {
 	dir := setupFixtureDir(t)
 	origIdx := idx
-	idx = index.New(dir, scanner.ScanOptions{})
+	idx = index.New(dir, scanner.ScanOptions{}, profile.Default())
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
@@ -614,7 +628,7 @@ func TestGetDoc_BundleField(t *testing.T) {
 // Tool count
 // ---------------------------------------------------------------------------
 
-// TestNewFixtureServerToolsCount verifies newFixtureServer registers all 6 tools.
+// TestNewFixtureServerToolsCount verifies newFixtureServer registers all 13 tools.
 func TestNewFixtureServerToolsCount(t *testing.T) {
 	dir := setupFixtureDir(t)
 	srv := newFixtureServer(t, dir, scanner.ScanOptions{})
@@ -628,6 +642,9 @@ func TestNewFixtureServerToolsCount(t *testing.T) {
 	wantNames := map[string]bool{
 		"list_tags": true, "list_docs": true, "get_doc": true,
 		"validate_doc": true, "get_index": true, "get_log": true,
+		"graph_concept": true, "graph_relationships": true, "graph_trace": true,
+		"graph_search": true, "graph_integrity": true, "graph_coverage": true,
+		"graph_context": true,
 	}
 	if len(tools.Tools) != len(wantNames) {
 		t.Fatalf("got %d tools, want %d", len(tools.Tools), len(wantNames))
@@ -635,6 +652,12 @@ func TestNewFixtureServerToolsCount(t *testing.T) {
 	for _, tool := range tools.Tools {
 		if !wantNames[tool.Name] {
 			t.Errorf("unexpected tool: %s", tool.Name)
+		}
+		delete(wantNames, tool.Name)
+	}
+	if len(wantNames) > 0 {
+		for name := range wantNames {
+			t.Errorf("missing tool: %s", name)
 		}
 	}
 }
