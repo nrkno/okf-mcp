@@ -3,10 +3,20 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-07-23T00:00:00Z
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-08-31
+
+**Creation**: `graph_concept` MCP tool — returns metadata and edge counts for a single concept by relative `file_path`.
+**Creation**: `graph_relationships` MCP tool — returns outgoing and incoming relationships for a concept, with optional `direction` and `type` filters.
+**Creation**: `graph_trace` MCP tool — BFS traversal of upstream or downstream relationships from a starting concept, with optional `type` filter and `max_depth` clamped to 1–20.
+**Creation**: `graph_search` MCP tool — text search over indexed concepts using the existing weighted-token scorer, with optional `type`/`tags` filters and `limit` clamped to 1–100.
+**Update**: `cmd/okf-mcp/main.go` — added `--profile` CLI flag; profile loading follows the order explicit flag → auto-discovered `.okf-profile.yaml` in scan root → default profile. An invalid explicit path exits code 2; an invalid discovered file logs a warning and falls back to default. Profile selection is always logged to stderr.
+**Update**: `docs/tools.md` — documented the four new graph navigation tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`).
+**Update**: `docs/configuration.md` — documented the `--profile` flag, profile resolution order, exit-code behaviour, and added the four new graph tool permission strings.
 
 ## 2026-07-23
 

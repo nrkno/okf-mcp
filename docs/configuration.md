@@ -1,9 +1,9 @@
 ---
 type: Configuration
 title: Configuration
-description: How to register okf-mcp in opencode, Claude Desktop, and other MCP hosts, including permission strings, CLI flags, and auto-registration behaviour.
-tags: [configuration, mcp, opencode, claude, permissions, client-setup, multi-bundle, hidden]
-timestamp: 2026-07-23T00:00:00Z
+description: How to register okf-mcp in opencode, Claude Desktop, and other MCP hosts, including permission strings, CLI flags, profile auto-discovery, and auto-registration behaviour.
+tags: [configuration, mcp, opencode, claude, permissions, client-setup, multi-bundle, hidden, profile]
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # Configuration
@@ -21,6 +21,7 @@ Flags:
   -validate         Validate document conformance and exit (no MCP server)
   -path string      Path to validate (relative to cwd) (default ".")
   -enable-hidden    Traverse hidden directories (except .git, .hg, .svn)
+  -profile string   Path to an OKF relationship profile YAML file
 ```
 
 The flags are the only configuration surface. There are no env vars, no config file, no remote KV. Pass them on the command line.
@@ -57,6 +58,26 @@ okf-mcp --validate --enable-hidden
 
 **Default is off.** When `--enable-hidden` is not set, scanner behavior is byte-identical to pre-flag behavior — every dot-dir is skipped, including the canonical `.opencode/architecture/` bundle shipped with this repo's own docs tooling. If your repo places an OKF bundle under `.opencode/`, you must launch `okf-mcp` with the flag to see it.
 
+### `--profile string`
+
+Loads an OKF relationship profile YAML file that defines typed relationships between documents. Profile loading uses this resolution order:
+
+1. Explicit path from `--profile`.
+2. Auto-discovered `.okf-profile.yaml` in the scan root (current working directory).
+3. The built-in default (empty) profile, which classifies every link as `"untyped"`.
+
+If `--profile` points to a missing or invalid file, the server exits with code `2` (consistent with `--validate` infrastructure failures). If an auto-discovered `.okf-profile.yaml` is invalid, a warning is logged to stderr and the server falls back to the default profile so it can still start.
+
+Profile loading is always logged to stderr (profile name and source path) for security visibility.
+
+```bash
+# Explicit profile
+okf-mcp --profile ./profiles/domain.yaml
+
+# Auto-discovered .okf-profile.yaml in cwd
+okf-mcp
+```
+
 ## Runtime behaviour
 
 `okf-mcp` communicates exclusively over stdio (JSON-RPC). It has no network interface and no authentication. It is designed to run as a subprocess of the MCP host process — the host starts it, pipes stdin/stdout, and terminates it when the session ends.
@@ -65,13 +86,14 @@ On startup, `okf-mcp` prints to stderr:
 
 ```
 okf-mcp: serving /path/to/repo
+okf-mcp: loaded profile "Domain" from /path/to/repo/.okf-profile.yaml
 ```
 
-This confirms which directory is being scanned. If the path is wrong, adjust the working directory in the host configuration.
+This confirms which directory is being scanned and which profile was loaded. If the path is wrong, adjust the working directory in the host configuration.
 
 ## opencode
 
-Add a server entry to `opencode.json` and include all six tool names in the `permissions.allow` list:
+Add a server entry to `opencode.json` and include all tool names in the `permissions.allow` list:
 
 ```json
 {
@@ -89,13 +111,17 @@ Add a server entry to `opencode.json` and include all six tool names in the `per
       "mcp__okf-mcp__get_doc",
       "mcp__okf-mcp__validate_doc",
       "mcp__okf-mcp__get_index",
-      "mcp__okf-mcp__get_log"
+      "mcp__okf-mcp__get_log",
+      "mcp__okf-mcp__graph_concept",
+      "mcp__okf-mcp__graph_relationships",
+      "mcp__okf-mcp__graph_trace",
+      "mcp__okf-mcp__graph_search"
     ]
   }
 }
 ```
 
-The six permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
+The permission strings follow the opencode pattern `mcp__<server-key>__<tool-name>`. If you register the server under a different key than `okf-mcp`, update the permission strings to match.
 
 ## Claude Desktop
 
@@ -126,6 +152,10 @@ The injected instructions frame okf-mcp as the primary way to find documentation
 4. **`get_doc(topic, tags?)`** — retrieve a document, scored by title/tag/description match.
 5. **`validate_doc`** — check document conformance for a single file or the whole bundle.
 6. **`get_log`** — access structured change log entries (each tagged with its source `log.md` path).
+7. **`graph_concept`** — return metadata and edge counts for a single concept.
+8. **`graph_relationships`** — return outgoing/incoming relationships for a concept.
+9. **`graph_trace`** — trace upstream or downstream relationships from a concept.
+10. **`graph_search`** — search concepts by text query with optional type/tag filters.
 
 The instructions also mention that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
 

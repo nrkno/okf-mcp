@@ -1,14 +1,14 @@
 ---
 type: API Reference
 title: MCP Tools Reference
-description: Complete reference for the six MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, and get_log — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
-tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, mcp, scoring, match, multi-bundle, bundle]
-timestamp: 2026-07-23T00:00:00Z
+description: Complete reference for the MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, get_log, and the graph navigation tools (graph_concept, graph_relationships, graph_trace, graph_search) — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
+tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, graph-concept, graph-relationships, graph-trace, graph-search, mcp, scoring, match, multi-bundle, bundle, graph]
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # MCP Tools Reference
 
-`okf-mcp` exposes six tools over the MCP stdio protocol. All tools rebuild the index on every call — freshly created or edited files are always reflected without restarting the server.
+`okf-mcp` exposes navigation and analysis tools over the MCP stdio protocol. All tools rebuild the index on every call — freshly created or edited files are always reflected without restarting the server.
 
 ## `list_tags`
 
@@ -316,3 +316,161 @@ When no `log.md` is found or one is malformed, `get_log` never silently returns 
 3. get_log(action="Creation")                    → only creation entries
 4. get_log(limit=5)                              → most recent 5 entries
 ```
+
+---
+
+## `graph_concept`
+
+Returns metadata and edge counts for a single concept (indexed document) identified by its relative `file_path`.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the concept document |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path from the scan root |
+| `type` | string | Document type from frontmatter |
+| `title` | string | Document title from frontmatter |
+| `description` | string | Document description from frontmatter |
+| `tags` | string[] | Document tags from frontmatter |
+| `bundle` | string | OKF bundle the file belongs to (I-17) |
+| `outgoing_count` | int | Number of outgoing relationships |
+| `incoming_count` | int | Number of incoming relationships |
+| `outgoing_types` | string[] | Sorted unique outgoing relationship types |
+| `incoming_types` | string[] | Sorted unique incoming relationship types |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Concept not found | `concept not found: "<path>"` |
+
+---
+
+## `graph_relationships`
+
+Returns the outgoing and incoming relationships for a concept.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the concept document |
+| `direction` | string | no | `"both"` | `"outgoing"`, `"incoming"`, or `"both"` |
+| `type` | string | no | — | Filter by relationship type |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `outgoing` | array | Outgoing edges (see below) |
+| `incoming` | array | Incoming edges (see below) |
+
+Each outgoing edge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `target` | string | Relative path of the target concept |
+| `type` | string | Relationship type |
+| `heading` | string | Section heading where the link appeared |
+| `line` | int | 1-based line number in the source document body |
+
+Each incoming edge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | string | Relative path of the source concept |
+| `type` | string | Relationship type (inverse of the original edge) |
+| `heading` | string | Section heading where the link appeared |
+| `line` | int | 1-based line number in the source document body |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Invalid `direction` | `invalid direction "<value>": must be "outgoing", "incoming", or "both"` |
+
+---
+
+## `graph_trace`
+
+Traces upstream or downstream relationships from a starting concept using BFS, optionally filtering by relationship type and bounding depth.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the starting concept |
+| `direction` | string | **yes** | — | `"upstream"` (incoming) or `"downstream"` (outgoing) |
+| `type` | string | no | — | Filter by relationship type |
+| `max_depth` | number | no | `5` | Maximum traversal depth, clamped to 1–20 |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `start` | string | Starting concept file path |
+| `direction` | string | `"upstream"` or `"downstream"` |
+| `steps` | array | Reachable concepts in BFS order |
+| `total_reachable` | int | Total number of reachable concepts |
+
+Each step:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `node` | string | Relative path of the reachable concept |
+| `depth` | int | Hop count from the start concept |
+| `via_type` | string | Relationship type used to reach this node |
+| `path` | string[] | Edge chain as `"source → target"` strings |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Invalid `direction` | `invalid direction "<value>": must be "upstream" or "downstream"` |
+
+---
+
+## `graph_search`
+
+Searches indexed concepts by text query, with optional type and tag filters. Results are scored using the same weighted token model as `get_doc`.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `query` | string | no | `""` | Search query |
+| `type` | string | no | — | Exact-match concept type filter |
+| `tags` | string[] | no | — | Tag filter (OR semantics) |
+| `limit` | number | no | `20` | Maximum results, clamped to 1–100 |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `concepts` | array | Matching concepts, sorted by score desc then `file_path` asc |
+| `total` | int | Total number of matching concepts before `limit` |
+
+Each concept:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path from the scan root |
+| `type` | string | Document type from frontmatter |
+| `title` | string | Document title from frontmatter |
+| `description` | string | Document description from frontmatter |
+| `tags` | string[] | Document tags from frontmatter |
+| `bundle` | string | OKF bundle the file belongs to (I-17) |
+| `score` | number | Text relevance score from `matcher.Score` |
+
+### Scoring
+
+Same weighted-token model as `get_doc`: title 3×, tags 2×, description 1×. Tag-filter failures (score `-1`) are excluded. An empty `query` returns all concepts that pass the type/tag filters with score `0`.

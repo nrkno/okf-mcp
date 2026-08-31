@@ -13,6 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/nrkno/plattform-okf-mcp/internal/graph"
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
 	"github.com/nrkno/plattform-okf-mcp/internal/logparser"
 	"github.com/nrkno/plattform-okf-mcp/internal/matcher"
@@ -81,6 +82,66 @@ var getLogTool = mcp.NewTool("get_log",
 	),
 	mcp.WithNumber("limit",
 		mcp.Description("Optional: maximum number of entries to return (default: all)"),
+	),
+)
+
+// graphConceptTool returns metadata and edge counts for a single concept.
+var graphConceptTool = mcp.NewTool("graph_concept",
+	mcp.WithDescription("Return metadata and edge counts for a single concept"),
+	mcp.WithString("file_path",
+		mcp.Required(),
+		mcp.Description("Relative path of the concept document"),
+	),
+)
+
+// graphRelationshipsTool returns outgoing and incoming relationships for a concept.
+var graphRelationshipsTool = mcp.NewTool("graph_relationships",
+	mcp.WithDescription("Return outgoing and incoming relationships for a concept"),
+	mcp.WithString("file_path",
+		mcp.Required(),
+		mcp.Description("Relative path of the concept document"),
+	),
+	mcp.WithString("direction",
+		mcp.Description(`Relationship direction: "outgoing", "incoming", or "both" (default)`),
+	),
+	mcp.WithString("type",
+		mcp.Description("Filter by relationship type"),
+	),
+)
+
+// graphTraceTool traces upstream or downstream relationships from a concept.
+var graphTraceTool = mcp.NewTool("graph_trace",
+	mcp.WithDescription("Trace upstream or downstream relationships from a concept"),
+	mcp.WithString("file_path",
+		mcp.Required(),
+		mcp.Description("Relative path of the starting concept"),
+	),
+	mcp.WithString("direction",
+		mcp.Required(),
+		mcp.Description(`Traversal direction: "upstream" or "downstream"`),
+	),
+	mcp.WithString("type",
+		mcp.Description("Filter by relationship type"),
+	),
+	mcp.WithNumber("max_depth",
+		mcp.Description("Maximum traversal depth, clamped to 1-20 (default 5)"),
+	),
+)
+
+// graphSearchTool searches for concepts by text query.
+var graphSearchTool = mcp.NewTool("graph_search",
+	mcp.WithDescription("Search for concepts by text query with optional type and tag filters"),
+	mcp.WithString("query",
+		mcp.Description("Search query"),
+	),
+	mcp.WithString("type",
+		mcp.Description("Exact-match concept type filter"),
+	),
+	mcp.WithArray("tags",
+		mcp.Description("Tag filter (OR semantics)"),
+	),
+	mcp.WithNumber("limit",
+		mcp.Description("Maximum results, clamped to 1-100 (default 20)"),
 	),
 )
 
@@ -504,35 +565,346 @@ func marshalLogResult(entries []logEntryJSON, note string) (*mcp.CallToolResult,
 	return mcp.NewToolResultText(string(out)), nil
 }
 
+// graphConceptHandler returns metadata and edge counts for a single concept.
+func graphConceptHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	filePath, _ := args["file_path"].(string)
+	if filePath == "" {
+		return mcp.NewToolResultError("file_path is required"), nil
+	}
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	node, ok := g.Concept(filePath)
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("concept not found: %q", filePath)), nil
+	}
+
+	outgoing := g.Outgoing(filePath, "")
+	incoming := g.Incoming(filePath, "")
+	payload := map[string]any{
+		"file_path":       node.FilePath,
+		"type":            node.Type,
+		"title":           node.Title,
+		"description":     node.Description,
+		"tags":            node.Tags,
+		"bundle":          node.Bundle,
+		"outgoing_count":  len(outgoing),
+		"incoming_count":  len(incoming),
+		"outgoing_types":  uniqueEdgeTypes(outgoing),
+		"incoming_types":  uniqueEdgeTypes(incoming),
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal concept: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// graphRelationshipsHandler returns outgoing and incoming relationships for a concept.
+func graphRelationshipsHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	filePath, _ := args["file_path"].(string)
+	if filePath == "" {
+		return mcp.NewToolResultError("file_path is required"), nil
+	}
+
+	direction, _ := args["direction"].(string)
+	if direction == "" {
+		direction = "both"
+	}
+	if direction != "outgoing" && direction != "incoming" && direction != "both" {
+		return mcp.NewToolResultError(
+			fmt.Sprintf("invalid direction %q: must be \"outgoing\", \"incoming\", or \"both\"", direction),
+		), nil
+	}
+
+	relType, _ := args["type"].(string)
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	var outgoing, incoming []relationshipEdgeJSON
+	if direction == "outgoing" || direction == "both" {
+		for _, e := range g.Outgoing(filePath, relType) {
+			outgoing = append(outgoing, relationshipEdgeJSON{
+				Target:  e.Target,
+				Type:    e.Type,
+				Heading: e.Heading,
+				Line:    e.Line,
+			})
+		}
+	}
+	if direction == "incoming" || direction == "both" {
+		for _, e := range g.Incoming(filePath, relType) {
+			incoming = append(incoming, relationshipEdgeJSON{
+				Source:  e.Source,
+				Type:    e.Type,
+				Heading: e.Heading,
+				Line:    e.Line,
+			})
+		}
+	}
+
+	payload := map[string]any{
+		"outgoing": outgoing,
+		"incoming": incoming,
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal relationships: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// graphTraceHandler traces upstream or downstream relationships from a concept.
+func graphTraceHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	filePath, _ := args["file_path"].(string)
+	if filePath == "" {
+		return mcp.NewToolResultError("file_path is required"), nil
+	}
+
+	direction, _ := args["direction"].(string)
+	if direction != "upstream" && direction != "downstream" {
+		return mcp.NewToolResultError(
+			fmt.Sprintf("invalid direction %q: must be \"upstream\" or \"downstream\"", direction),
+		), nil
+	}
+
+	relType, _ := args["type"].(string)
+	maxDepth := argInt(args, "max_depth", 5)
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	if maxDepth > 20 {
+		maxDepth = 20
+	}
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	steps := g.Trace(filePath, direction, relType, maxDepth)
+	stepJSON := make([]map[string]any, len(steps))
+	for i, s := range steps {
+		stepJSON[i] = map[string]any{
+			"node":     s.Node,
+			"depth":    s.Depth,
+			"via_type": s.ViaType,
+			"path":     s.Path,
+		}
+	}
+
+	payload := map[string]any{
+		"start":           filePath,
+		"direction":       direction,
+		"steps":           stepJSON,
+		"total_reachable": len(steps),
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal trace: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// graphSearchHandler searches for concepts by text query.
+func graphSearchHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	query, _ := args["query"].(string)
+	typeFilter, _ := args["type"].(string)
+	tags := argStringSlice(args, "tags")
+	limit := argInt(args, "limit", 20)
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	results := g.Search(query, typeFilter, tags)
+	if limit > len(results) {
+		limit = len(results)
+	}
+
+	concepts := make([]map[string]any, limit)
+	for i, r := range results[:limit] {
+		concepts[i] = map[string]any{
+			"file_path":   r.Node.FilePath,
+			"type":        r.Node.Type,
+			"title":       r.Node.Title,
+			"description": r.Node.Description,
+			"tags":        r.Node.Tags,
+			"bundle":      r.Node.Bundle,
+			"score":       r.Score,
+		}
+	}
+
+	payload := map[string]any{
+		"concepts": concepts,
+		"total":    len(results),
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal search results: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// relationshipEdgeJSON is one edge in a graph_relationships response.
+type relationshipEdgeJSON struct {
+	Target  string `json:"target,omitempty"`
+	Source  string `json:"source,omitempty"`
+	Type    string `json:"type"`
+	Heading string `json:"heading"`
+	Line    int    `json:"line"`
+}
+
+// uniqueEdgeTypes returns the sorted unique relationship types in edges.
+func uniqueEdgeTypes(edges []graph.Edge) []string {
+	seen := make(map[string]struct{})
+	for _, e := range edges {
+		seen[e.Type] = struct{}{}
+	}
+	types := make([]string, 0, len(seen))
+	for t := range seen {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return types
+}
+
+// argInt extracts an integer argument from args, defaulting to defaultVal.
+// MCP encodes numbers as float64.
+func argInt(args map[string]any, key string, defaultVal int) int {
+	if v, ok := args[key]; ok {
+		if f, ok := v.(float64); ok {
+			return int(f)
+		}
+	}
+	return defaultVal
+}
+
+// argStringSlice extracts a string-array argument from args.
+func argStringSlice(args map[string]any, key string) []string {
+	if raw, ok := args[key]; ok && raw != nil {
+		if arr, ok := raw.([]interface{}); ok {
+			out := make([]string, 0, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					out = append(out, s)
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+// profileSource describes how a profile was selected.
+type profileSource struct {
+	Kind string // "explicit", "discovered", or "default"
+	Path string // non-empty for explicit/discovered
+}
+
+// loadProfile selects a profile using the resolution order:
+//   1. explicit path from --profile (error if invalid)
+//   2. .okf-profile.yaml in scanRoot (warning if invalid, then fall through)
+//   3. profile.Default()
+func loadProfile(scanRoot, explicitPath string) (*profile.Profile, profileSource, error) {
+	if explicitPath != "" {
+		prof, err := profile.Load(explicitPath)
+		if err != nil {
+			return nil, profileSource{}, fmt.Errorf("load profile %q: %w", explicitPath, err)
+		}
+		return prof, profileSource{Kind: "explicit", Path: explicitPath}, nil
+	}
+
+	discovered := filepath.Join(scanRoot, ".okf-profile.yaml")
+	if _, err := os.Stat(discovered); err == nil {
+		prof, err := profile.Load(discovered)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "okf-mcp: WARN: discovered profile %q is invalid: %v; using default profile\n", discovered, err)
+			return profile.Default(), profileSource{Kind: "default"}, nil
+		}
+		return prof, profileSource{Kind: "discovered", Path: discovered}, nil
+	}
+
+	return profile.Default(), profileSource{Kind: "default"}, nil
+}
+
+// logProfileLoaded writes profile-selection diagnostics to stderr
+// (Amendment 6 security visibility).
+func logProfileLoaded(prof *profile.Profile, src profileSource) {
+	switch src.Kind {
+	case "explicit":
+		fmt.Fprintf(os.Stderr, "okf-mcp: loaded profile %q from %s\n", prof.Name, src.Path)
+	case "discovered":
+		fmt.Fprintf(os.Stderr, "okf-mcp: loaded discovered profile %q from %s\n", prof.Name, src.Path)
+	default:
+		fmt.Fprintf(os.Stderr, "okf-mcp: using default profile\n")
+	}
+}
+
 func main() {
 	validateFlag := flag.Bool("validate", false, "Validate document conformance and exit (no MCP server)")
 	validatePath := flag.String("path", ".", "Path to validate (relative to cwd)")
 	enableHidden := flag.Bool("enable-hidden", false, "Traverse hidden directories (except .git, .hg, .svn)")
+	profileFlag := flag.String("profile", "", "Path to an OKF relationship profile YAML file")
 	flag.Parse()
-
-	if *validateFlag {
-		runValidate(*validatePath, *enableHidden)
-		return
-	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: failed to get working directory: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Profile loading order: explicit flag → auto-discovered .okf-profile.yaml
+	// in scan root → default profile. An explicit but invalid path is a startup
+	// failure (exit code 2, consistent with I-13). An invalid discovered file
+	// logs a warning and falls through to the default so the server still starts.
+	prof, profileSource, err := loadProfile(cwd, *profileFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: %v\n", err)
+		os.Exit(2)
+	}
+	logProfileLoaded(prof, profileSource)
+
+	if *validateFlag {
+		runValidate(*validatePath, *enableHidden)
+		return
+	}
+
 	fmt.Fprintf(os.Stderr, "okf-mcp: serving %s\n", cwd)
 
-	idx = index.New(cwd, scanner.ScanOptions{EnableHidden: *enableHidden}, profile.Default())
+	idx = index.New(cwd, scanner.ScanOptions{EnableHidden: *enableHidden}, prof)
 
 	s := server.NewMCPServer("okf-mcp", "1.0.0",
-	server.WithInstructions(
-		"This server is the primary way to find documentation, code definitions, architecture design, decision records, and reports in this repository — use it before reading files directly. "+
-			"Start with `get_index` to see the tree and the OKF bundles in scope. "+
-			"Each indexed document carries a `bundle` field naming its OKF bundle. "+
-			"Then use `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` to retrieve a document (scored by title/tag/description match), "+
-			"`validate_doc` to check conformance, or `get_log` for change log entries (each tagged with its source `log.md` path). "+
-			"The server is launched with `--enable-hidden` to include dot-directories like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.",
-	),
+		server.WithInstructions(
+			"This server is the primary way to find documentation, code definitions, architecture design, decision records, and reports in this repository — use it before reading files directly. "+
+				"Start with `get_index` to see the tree and the OKF bundles in scope. "+
+				"Each indexed document carries a `bundle` field naming its OKF bundle. "+
+				"Then use `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` to retrieve a document (scored by title/tag/description match), "+
+				"`validate_doc` to check conformance, `get_log` for change log entries (each tagged with its source `log.md` path), "+
+				"or the graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`) to navigate relationships between documents. "+
+				"The server is launched with `--enable-hidden` to include dot-directories like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.",
+		),
 	)
 	s.AddTool(listTagsTool, listTagsHandler)
 	s.AddTool(listDocsTool, listDocsHandler)
@@ -540,6 +912,10 @@ func main() {
 	s.AddTool(validateDocTool, validateDocHandler)
 	s.AddTool(getIndexTool, getIndexHandler)
 	s.AddTool(getLogTool, getLogHandler)
+	s.AddTool(graphConceptTool, graphConceptHandler)
+	s.AddTool(graphRelationshipsTool, graphRelationshipsHandler)
+	s.AddTool(graphTraceTool, graphTraceHandler)
+	s.AddTool(graphSearchTool, graphSearchHandler)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: %v\n", err)
