@@ -42,7 +42,7 @@ func Extract(body string, docDir string, corpusRoot string) []ExtractedLink {
 	var currentHeading string
 	var currentHeadingNormal string
 
-	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -84,7 +84,9 @@ func Extract(body string, docDir string, corpusRoot string) []ExtractedLink {
 		}
 
 		return ast.WalkContinue, nil
-	})
+	}); err != nil {
+		return nil
+	}
 
 	return links
 }
