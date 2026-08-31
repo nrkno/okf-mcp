@@ -62,6 +62,14 @@ invariants:
     min: 1
     max: -1
     severity: error
+  - id: R2
+    description: Supersession is an outgoing relationship
+    source_type: "*"
+    relationship: supersedes
+    direction: outgoing
+    min: 0
+    max: 0
+    severity: error
 `
 
 // writeProfile writes graphProfileYAML (or caller-supplied content) as
@@ -635,13 +643,13 @@ func TestGraphIntegrity_AllChecks(t *testing.T) {
 	if got, want := float64Int(summary["orphan_concepts"]), 1; got != want {
 		t.Errorf("orphan_concepts: got %d, want %d", got, want)
 	}
-	if got, want := float64Int(summary["profile_violations"]), 2; got != want {
-		t.Errorf("profile_violations: got %d, want %d (profile + cardinality)", got, want)
+	if got, want := float64Int(summary["profile_violations"]), 3; got != want {
+		t.Errorf("profile_violations: got %d, want %d (profile + 2 cardinality)", got, want)
 	}
 	if got, want := float64Int(summary["superseded_deps"]), 1; got != want {
 		t.Errorf("superseded_deps: got %d, want %d", got, want)
 	}
-	if got, want := float64Int(summary["total_findings"]), 5; got != want {
+	if got, want := float64Int(summary["total_findings"]), 6; got != want {
 		t.Errorf("total_findings: got %d, want %d", got, want)
 	}
 
@@ -655,7 +663,7 @@ func TestGraphIntegrity_AllChecks(t *testing.T) {
 		"dangling":             1,
 		"orphans":              1,
 		"profile_violations":   1,
-		"cardinality_violation": 1,
+		"cardinality_violation": 2,
 		"superseded_deps":      1,
 	}
 	for check, want := range wantChecks {
