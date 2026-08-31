@@ -10,6 +10,10 @@ timestamp: 2026-08-31T00:00:00Z
 
 ## 2026-08-31
 
+**Update**: `internal/profile/profile.go` — empty/nil `allowed_source_types` or `allowed_target_types` on a relationship is now treated as "any type allowed" (wildcard), matching the intuitive semantics for minimal profiles.
+**Update**: `internal/graph/graph.go` — the `superseded_deps` integrity check no longer hard-codes the relationship name `"supersedes"`. It now derives the set of supersession relationships from profile invariants with an outgoing cardinality of `max: 0`. If no such invariant is present, the check is skipped to avoid false negatives.
+**Update**: `cmd/okf-mcp/graph_test.go` — added `R2` outgoing-max-0 `supersedes` invariant to `graphProfileYAML` and updated expected integrity counts.
+**Note**: `docs/architecture/design/graph-projection.md` still describes the old hard-coded `"supersedes"` superseded-dependency behavior and does not yet document the empty-allow-list wildcard semantics. Edits to `docs/architecture/**` are not permitted in this session; update when the directory is writable.
 **Update**: `AGENTS.md` — recorded invariants I-20 through I-31; added `internal/graph`, `internal/linkextract`, and `internal/profile` to the package table; updated overview and key-documentation summary to reflect thirteen tools.
 **Update**: `docs/architecture.md` — documented `internal/graph`, `internal/linkextract`, and `internal/profile`; added the graph-projection data model and profile-loading sections; extended the invariants table to I-1→I-31.
 **Update**: `docs/tools.md` — documented `graph_integrity`, `graph_coverage`, and `graph_context`; updated frontmatter and intro to reference all thirteen tools and seven graph tools.
