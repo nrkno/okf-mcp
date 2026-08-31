@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/nrkno/plattform-okf-mcp/internal/linkextract"
 	"github.com/nrkno/plattform-okf-mcp/internal/matcher"
@@ -699,17 +700,20 @@ func (g *Graph) countEdges(filePath string, relationship string, direction strin
 }
 
 // buildSupersededRels returns the set of relationship names that mark a node as
-// superseded when they appear as an incoming inverse edge. Relationships are
-// identified from profile invariants with an outgoing cardinality of zero,
-// which is the profile's way of declaring a replacement/supersession
-// relationship.
+// superseded when they appear as an incoming inverse edge. Supersession
+// relationships are identified from profile invariants whose relationship name
+// contains "supersede" (case-insensitive) and whose direction is outgoing.
+// This captures the canonical "supersedes" relationship as well as variants
+// such as "superseded_by", regardless of the invariant's cardinality value.
 func buildSupersededRels(prof *profile.Profile) map[string]struct{} {
 	rels := make(map[string]struct{})
 	if prof == nil {
 		return rels
 	}
 	for _, inv := range prof.Invariants {
-		if inv.Direction == "outgoing" && inv.Max == 0 && inv.Relationship != "" {
+		if inv.Direction == "outgoing" &&
+			inv.Relationship != "" &&
+			strings.Contains(strings.ToLower(inv.Relationship), "supersede") {
 			rels[inv.Relationship] = struct{}{}
 		}
 	}

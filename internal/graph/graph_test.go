@@ -388,6 +388,150 @@ func TestTrace(t *testing.T) {
 	}
 }
 
+func TestBuildSupersededRels(t *testing.T) {
+	tests := []struct {
+		name     string
+		profile  string
+		wantRels []string
+	}{
+		{
+			name: "nil profile",
+			wantRels: nil,
+		},
+		{
+			name: "canonical supersedes max 1",
+			profile: `version: "1.0"
+relationships:
+  - name: "supersedes"
+    heading_aliases: ["Supersedes"]
+    inverse: "superseded_by"
+invariants:
+  - id: "P3"
+    source_type: "*"
+    relationship: "supersedes"
+    direction: "outgoing"
+    min: 0
+    max: 1
+    severity: "error"
+`,
+			wantRels: []string{"supersedes"},
+		},
+		{
+			name: "supersedes max 0",
+			profile: `version: "1.0"
+relationships:
+  - name: "supersedes"
+    heading_aliases: ["Supersedes"]
+    inverse: "superseded_by"
+invariants:
+  - id: "P2"
+    source_type: "*"
+    relationship: "supersedes"
+    direction: "outgoing"
+    min: 0
+    max: 0
+    severity: "error"
+`,
+			wantRels: []string{"supersedes"},
+		},
+		{
+			name: "case insensitive match",
+			profile: `version: "1.0"
+relationships:
+  - name: "Supersedes"
+    heading_aliases: ["Supersedes"]
+    inverse: "superseded_by"
+invariants:
+  - id: "P3"
+    source_type: "*"
+    relationship: "Supersedes"
+    direction: "outgoing"
+    min: 0
+    max: 1
+    severity: "error"
+`,
+			wantRels: []string{"Supersedes"},
+		},
+		{
+			name: "superseded variant name",
+			profile: `version: "1.0"
+relationships:
+  - name: "is_superseded_by"
+    heading_aliases: ["Replaced by"]
+    inverse: "supersedes"
+invariants:
+  - id: "P3"
+    source_type: "*"
+    relationship: "is_superseded_by"
+    direction: "outgoing"
+    min: 0
+    max: 1
+    severity: "error"
+`,
+			wantRels: []string{"is_superseded_by"},
+		},
+		{
+			name: "non-supersession max 0 not included",
+			profile: `version: "1.0"
+relationships:
+  - name: "forbids_dependency"
+    heading_aliases: ["Forbids dependency"]
+    inverse: "forbidden_by"
+invariants:
+  - id: "P2"
+    source_type: "*"
+    relationship: "forbids_dependency"
+    direction: "outgoing"
+    min: 0
+    max: 0
+    severity: "error"
+`,
+			wantRels: nil,
+		},
+		{
+			name: "incoming supersede invariant ignored",
+			profile: `version: "1.0"
+relationships:
+  - name: "supersedes"
+    heading_aliases: ["Supersedes"]
+    inverse: "superseded_by"
+invariants:
+  - id: "P3"
+    source_type: "*"
+    relationship: "supersedes"
+    direction: "incoming"
+    min: 0
+    max: 1
+    severity: "error"
+`,
+			wantRels: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var prof *profile.Profile
+			if tt.profile != "" {
+				prof = loadProfile(t, t.TempDir(), tt.profile)
+			}
+			got := buildSupersededRels(prof)
+			var gotRels []string
+			for rel := range got {
+				gotRels = append(gotRels, rel)
+			}
+			sort.Strings(gotRels)
+			var wantRels []string
+			if tt.wantRels != nil {
+				wantRels = append([]string(nil), tt.wantRels...)
+				sort.Strings(wantRels)
+			}
+			if !reflect.DeepEqual(gotRels, wantRels) {
+				t.Errorf("buildSupersededRels() = %v, want %v", gotRels, wantRels)
+			}
+		})
+	}
+}
+
 func TestIntegrity(t *testing.T) {
 	dir := t.TempDir()
 	prof := loadProfile(t, dir, `version: "1.0"
@@ -489,19 +633,21 @@ func TestIntegrity_NoProfile(t *testing.T) {
 }
 
 func TestIntegrity_SupersededRenamedRelationship(t *testing.T) {
+	// A relationship whose canonical name contains "supersede" but is not the
+	// literal "supersedes" must still trigger the superseded-deps check.
 	dir := t.TempDir()
 	prof := loadProfile(t, dir, `version: "1.0"
 relationships:
-  - name: "replaces"
+  - name: "is_superseded_by"
     heading_aliases: ["Replaces"]
-    inverse: "replaced_by"
+    inverse: "supersedes"
 invariants:
-  - id: "P1"
+  - id: "P3"
     source_type: "*"
-    relationship: "replaces"
+    relationship: "is_superseded_by"
     direction: "outgoing"
     min: 0
-    max: 0
+    max: 1
     severity: "error"
 `)
 	old := writeDoc(t, dir, "old.md", "type: Requirement\n", "# Old\n")
@@ -528,9 +674,50 @@ invariants:
 	}
 }
 
+func TestIntegrity_SupersededMaxOne(t *testing.T) {
+	// Design's canonical P3 invariant: outgoing supersedes with max: 1.
+	dir := t.TempDir()
+	prof := loadProfile(t, dir, `version: "1.0"
+relationships:
+  - name: "supersedes"
+    heading_aliases: ["Supersedes"]
+    inverse: "superseded_by"
+invariants:
+  - id: "P3"
+    source_type: "*"
+    relationship: "supersedes"
+    direction: "outgoing"
+    min: 0
+    max: 1
+    severity: "error"
+`)
+	old := writeDoc(t, dir, "old.md", "type: Requirement\n", "# Old\n")
+	newer := writeDoc(t, dir, "new.md", "type: Requirement\n", "# New\n## Supersedes\n[old](old.md)\n")
+	depends := writeDoc(t, dir, "depends.md", "type: Requirement\n", "# Depends\n## Depends on\n[old](old.md)\n")
+	docs := []parser.Doc{
+		parseFixture(t, dir, old),
+		parseFixture(t, dir, newer),
+		parseFixture(t, dir, depends),
+	}
+
+	g := Build(docs, dir, prof)
+	res := g.Integrity()
+
+	found := false
+	for _, f := range res.Findings {
+		if f.Check == "superseded_deps" && f.Source == "depends.md" && f.Target == "old.md" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected superseded_deps finding for depends.md -> old.md with max:1 P3, got %+v", res.Findings)
+	}
+}
+
 func TestIntegrity_NoSupersededInvariantSkipped(t *testing.T) {
 	dir := t.TempDir()
-	// Profile defines a replaces relationship but no outgoing-max-0 invariant,
+	// Profile defines a relationship but no outgoing supersession invariant,
 	// so the superseded-deps check must be skipped.
 	prof := loadProfile(t, dir, `version: "1.0"
 relationships:
