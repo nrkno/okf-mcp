@@ -309,6 +309,10 @@ func dedupStrings(ss []string) []string {
 }
 
 func containsWildcardOrMatch(list []string, value string) bool {
+	// An empty/nil allow-list means "any type allowed" (wildcard).
+	if len(list) == 0 {
+		return true
+	}
 	for _, item := range list {
 		if item == "*" || item == value {
 			return true

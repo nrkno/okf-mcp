@@ -433,6 +433,8 @@ relationships:
   - name: "specific"
     heading_aliases: ["S"]
     allowed_source_types: ["Implementation"]
+  - name: "unconstrained"
+    heading_aliases: ["U"]
 invariants: []
 `)
 
@@ -450,6 +452,9 @@ invariants: []
 	if p.IsAllowedSource("specific", "Requirement") {
 		t.Error("specific should not allow Requirement")
 	}
+	if !p.IsAllowedSource("unconstrained", "Anything") {
+		t.Error("empty allowed_source_types should allow any source")
+	}
 	if p.IsAllowedSource("unknown", "X") {
 		t.Error("unknown relationship should not allow anything")
 	}
@@ -466,6 +471,8 @@ relationships:
   - name: "implements"
     heading_aliases: ["I"]
     allowed_target_types: ["Requirement", "Design"]
+  - name: "relates_to"
+    heading_aliases: ["R"]
 invariants: []
 `)
 
@@ -482,6 +489,9 @@ invariants: []
 	}
 	if p.IsAllowedTarget("implements", "Verification") {
 		t.Error("implements should not allow Verification")
+	}
+	if !p.IsAllowedTarget("relates_to", "Anything") {
+		t.Error("empty allowed_target_types should allow any target")
 	}
 }
 
