@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/mark3labs/mcp-go v0.56.0
+	github.com/yuin/goldmark v1.8.5
 	gopkg.in/yaml.v3 v3.0.1
 )
 
