@@ -145,6 +145,46 @@ var graphSearchTool = mcp.NewTool("graph_search",
 	),
 )
 
+// graphIntegrityTool checks the structural integrity of the graph.
+var graphIntegrityTool = mcp.NewTool("graph_integrity",
+	mcp.WithDescription("Check the structural integrity of the document graph"),
+	mcp.WithArray("checks",
+		mcp.Description(`Optional subset of checks: "dangling", "orphans", "profile_violations", "superseded_deps". Defaults to all.`),
+	),
+)
+
+// graphCoverageTool reports how many source-type concepts are covered by
+// target-type concepts through a relationship.
+var graphCoverageTool = mcp.NewTool("graph_coverage",
+	mcp.WithDescription("Report coverage of target-type concepts from source-type concepts through a relationship"),
+	mcp.WithString("source_type",
+		mcp.Required(),
+		mcp.Description("Concept type of source nodes"),
+	),
+	mcp.WithString("target_type",
+		mcp.Required(),
+		mcp.Description("Concept type of target nodes"),
+	),
+	mcp.WithString("relationship",
+		mcp.Description("Relationship type to follow (default: any)"),
+	),
+)
+
+// graphContextTool returns a bounded neighborhood around a concept.
+var graphContextTool = mcp.NewTool("graph_context",
+	mcp.WithDescription("Return the immediate or two-hop neighborhood of a concept"),
+	mcp.WithString("file_path",
+		mcp.Required(),
+		mcp.Description("Relative path of the center concept"),
+	),
+	mcp.WithNumber("depth",
+		mcp.Description("Neighborhood depth: 1 or 2 (default 1)"),
+	),
+	mcp.WithNumber("max_results",
+		mcp.Description("Maximum neighbors to return, clamped to 1-1000 (default 100)"),
+	),
+)
+
 // listTagsHandler rebuilds the index and returns all tags as a JSON array.
 func listTagsHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if err := idx.Rebuild(); err != nil {
@@ -587,16 +627,16 @@ func graphConceptHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	outgoing := g.Outgoing(filePath, "")
 	incoming := g.Incoming(filePath, "")
 	payload := map[string]any{
-		"file_path":       node.FilePath,
-		"type":            node.Type,
-		"title":           node.Title,
-		"description":     node.Description,
-		"tags":            node.Tags,
-		"bundle":          node.Bundle,
-		"outgoing_count":  len(outgoing),
-		"incoming_count":  len(incoming),
-		"outgoing_types":  uniqueEdgeTypes(outgoing),
-		"incoming_types":  uniqueEdgeTypes(incoming),
+		"file_path":      node.FilePath,
+		"type":           node.Type,
+		"title":          node.Title,
+		"description":    node.Description,
+		"tags":           node.Tags,
+		"bundle":         node.Bundle,
+		"outgoing_count": len(outgoing),
+		"incoming_count": len(incoming),
+		"outgoing_types": uniqueEdgeTypes(outgoing),
+		"incoming_types": uniqueEdgeTypes(incoming),
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
@@ -767,6 +807,231 @@ func graphSearchHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 	return mcp.NewToolResultText(string(out)), nil
 }
 
+// graphIntegrityHandler checks the structural integrity of the graph.
+func graphIntegrityHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	checks := argStringSlice(args, "checks")
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	result := g.Integrity()
+
+	// Default to all checks when none are requested.
+	allowed := map[string]bool{
+		"dangling": true, "orphans": true,
+		"profile_violations": true, "superseded_deps": true,
+	}
+	filtered := result.Findings
+	if len(checks) > 0 {
+		selected := make(map[string]bool, len(checks))
+		for _, c := range checks {
+			if !allowed[c] {
+				return mcp.NewToolResultError(
+					fmt.Sprintf("invalid check %q: must be one of dangling, orphans, profile_violations, superseded_deps", c),
+				), nil
+			}
+			selected[c] = true
+		}
+		filtered = make([]graph.IntegrityFinding, 0, len(result.Findings))
+		for _, f := range result.Findings {
+			if matchesIntegrityCheck(f, selected) {
+				filtered = append(filtered, f)
+			}
+		}
+	}
+
+	summary := summarizeIntegrityFindings(filtered)
+	findings := make([]map[string]any, len(filtered))
+	for i, f := range filtered {
+		findings[i] = map[string]any{
+			"check":    f.Check,
+			"severity": f.Severity,
+			"source":   f.Source,
+			"target":   f.Target,
+			"heading":  f.Heading,
+			"message":  f.Message,
+		}
+	}
+
+	payload := map[string]any{
+		"summary": map[string]any{
+			"dangling_refs":      summary.DanglingRefs,
+			"orphan_concepts":    summary.OrphanConcepts,
+			"profile_violations": summary.ProfileViolations,
+			"superseded_deps":    summary.SupersededDeps,
+			"total_findings":     summary.TotalFindings,
+		},
+		"findings":       findings,
+		"profile_loaded": result.ProfileLoaded,
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal integrity result: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// matchesIntegrityCheck reports whether a finding matches a selected user-facing
+// check name. Cardinality violations are grouped under profile_violations.
+func matchesIntegrityCheck(f graph.IntegrityFinding, selected map[string]bool) bool {
+	switch f.Check {
+	case "dangling":
+		return selected["dangling"]
+	case "orphans":
+		return selected["orphans"]
+	case "superseded_deps":
+		return selected["superseded_deps"]
+	case "profile_violations", "cardinality_violation":
+		return selected["profile_violations"]
+	}
+	return false
+}
+
+// summarizeIntegrityFindings aggregates finding counts by user-facing check.
+func summarizeIntegrityFindings(findings []graph.IntegrityFinding) graph.IntegritySummary {
+	s := graph.IntegritySummary{TotalFindings: len(findings)}
+	for _, f := range findings {
+		switch f.Check {
+		case "dangling":
+			s.DanglingRefs++
+		case "orphans":
+			s.OrphanConcepts++
+		case "profile_violations", "cardinality_violation":
+			s.ProfileViolations++
+		case "superseded_deps":
+			s.SupersededDeps++
+		}
+	}
+	return s
+}
+
+// graphCoverageHandler reports how many source-type concepts are covered by
+// target-type concepts through a relationship.
+func graphCoverageHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	sourceType, _ := args["source_type"].(string)
+	if sourceType == "" {
+		return mcp.NewToolResultError("source_type is required"), nil
+	}
+	targetType, _ := args["target_type"].(string)
+	if targetType == "" {
+		return mcp.NewToolResultError("target_type is required"), nil
+	}
+	relType, _ := args["relationship"].(string)
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	result := g.Coverage(sourceType, targetType, relType)
+
+	uncovered := make([]map[string]any, len(result.UncoveredItems))
+	for i, item := range result.UncoveredItems {
+		uncovered[i] = map[string]any{
+			"file_path":       item.FilePath,
+			"title":           item.Title,
+			"nearest_targets": item.NearestTargets,
+		}
+	}
+	payload := map[string]any{
+		"source_type":     result.SourceType,
+		"target_type":     result.TargetType,
+		"relationship":    result.Relationship,
+		"total_sources":   result.TotalSources,
+		"covered":         result.Covered,
+		"uncovered":       result.Uncovered,
+		"coverage_ratio":  result.CoverageRatio,
+		"uncovered_items": uncovered,
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal coverage result: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// graphContextHandler returns a bounded neighborhood around a concept.
+func graphContextHandler(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args := req.GetArguments()
+	filePath, _ := args["file_path"].(string)
+	if filePath == "" {
+		return mcp.NewToolResultError("file_path is required"), nil
+	}
+	depth := argInt(args, "depth", 1)
+	if depth < 1 {
+		depth = 1
+	}
+	if depth > 2 {
+		depth = 2
+	}
+	maxResults := argInt(args, "max_results", 100)
+	if maxResults < 1 {
+		maxResults = 1
+	}
+	if maxResults > 1000 {
+		maxResults = 1000
+	}
+
+	if err := idx.Rebuild(); err != nil {
+		fmt.Fprintf(os.Stderr, "okf-mcp: ERROR: rebuild failed: %v\n", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	g := idx.Graph()
+	ctx := g.Context(filePath, depth, maxResults)
+	if ctx.Center == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("concept not found: %q", filePath)), nil
+	}
+
+	// Copy the center node so the response is independent of the graph's internals.
+	center := *ctx.Center
+	center.Tags = make([]string, len(ctx.Center.Tags))
+	copy(center.Tags, ctx.Center.Tags)
+
+	payload := map[string]any{
+		"center": map[string]any{
+			"file_path":   center.FilePath,
+			"type":        center.Type,
+			"title":       center.Title,
+			"description": center.Description,
+			"tags":        center.Tags,
+			"bundle":      center.Bundle,
+		},
+		"neighbors": map[string]any{
+			"upstream":   contextNeighborsToJSON(ctx.Neighbors.Upstream),
+			"downstream": contextNeighborsToJSON(ctx.Neighbors.Downstream),
+		},
+		"depth":           ctx.Depth,
+		"total_neighbors": ctx.TotalNeighbors,
+		"max_results":     ctx.MaxResults,
+		"truncated":       ctx.Truncated,
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return mcp.NewToolResultError("failed to marshal context result: " + err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// contextNeighborsToJSON converts ContextNeighbor slices to JSON maps.
+func contextNeighborsToJSON(neighbors []graph.ContextNeighbor) []map[string]any {
+	out := make([]map[string]any, len(neighbors))
+	for i, n := range neighbors {
+		out[i] = map[string]any{
+			"file_path": n.FilePath,
+			"type":      n.Type,
+			"via":       n.Via,
+		}
+	}
+	return out
+}
+
 // relationshipEdgeJSON is one edge in a graph_relationships response.
 type relationshipEdgeJSON struct {
 	Target  string `json:"target,omitempty"`
@@ -824,9 +1089,9 @@ type profileSource struct {
 }
 
 // loadProfile selects a profile using the resolution order:
-//   1. explicit path from --profile (error if invalid)
-//   2. .okf-profile.yaml in scanRoot (warning if invalid, then fall through)
-//   3. profile.Default()
+//  1. explicit path from --profile (error if invalid)
+//  2. .okf-profile.yaml in scanRoot (warning if invalid, then fall through)
+//  3. profile.Default()
 func loadProfile(scanRoot, explicitPath string) (*profile.Profile, profileSource, error) {
 	if explicitPath != "" {
 		prof, err := profile.Load(explicitPath)
@@ -902,7 +1167,7 @@ func main() {
 				"Each indexed document carries a `bundle` field naming its OKF bundle. "+
 				"Then use `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` to retrieve a document (scored by title/tag/description match), "+
 				"`validate_doc` to check conformance, `get_log` for change log entries (each tagged with its source `log.md` path), "+
-				"or the graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`) to navigate relationships between documents. "+
+				"or the graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) to navigate and analyse relationships between documents. "+
 				"The server is launched with `--enable-hidden` to include dot-directories like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.",
 		),
 	)
@@ -916,6 +1181,9 @@ func main() {
 	s.AddTool(graphRelationshipsTool, graphRelationshipsHandler)
 	s.AddTool(graphTraceTool, graphTraceHandler)
 	s.AddTool(graphSearchTool, graphSearchHandler)
+	s.AddTool(graphIntegrityTool, graphIntegrityHandler)
+	s.AddTool(graphCoverageTool, graphCoverageHandler)
+	s.AddTool(graphContextTool, graphContextHandler)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "okf-mcp: %v\n", err)
