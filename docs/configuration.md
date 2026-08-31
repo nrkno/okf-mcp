@@ -156,12 +156,12 @@ The injected instructions frame okf-mcp as the primary way to find documentation
 5. **`validate_doc`** — check document conformance for a single file or the whole bundle.
 6. **`get_log`** — access structured change log entries (each tagged with its source `log.md` path).
 7. **`graph_concept`** — return metadata and edge counts for a single concept.
-8. **`graph_relationships`** — return outgoing/incoming relationships for a concept.
-9. **`graph_trace`** — trace upstream or downstream relationships from a concept.
-10. **`graph_search`** — search concepts by text query with optional type/tag filters.
-11. **`graph_integrity`** — report dangling references, orphans, profile violations, and superseded dependencies.
-12. **`graph_coverage`** — check whether concepts of one type reach concepts of another type through a relationship.
-13. **`graph_context`** — return a bounded neighborhood slice around a concept.
+8. **`graph_relationships`** — return direct one-hop incoming/outgoing edges for a known concept; use `graph_trace` for transitive traversal.
+9. **`graph_trace`** — follow relationships transitively upstream/downstream from a known concept.
+10. **`graph_search`** — find graph concepts by topic/type/tags; use this when you don't yet know the file path.
+11. **`graph_integrity`** — audit graph structure for dangling links, orphans, profile violations, and superseded dependencies.
+12. **`graph_coverage`** — test whether concepts of one type have a relationship path to another type.
+13. **`graph_context`** — return a bounded neighborhood for reasoning context when loading the entire graph would be excessive.
 
 The instructions also mention that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
 

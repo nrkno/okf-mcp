@@ -10,6 +10,8 @@ timestamp: 2026-08-31T00:00:00Z
 
 ## 2026-08-31
 
+**Update**: `cmd/okf-mcp/main.go` — `WithInstructions` graph sentence rewritten as a workflow guide; updated `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, and `graph_context` tool descriptions to emphasize when to use each tool and how to discover relationship types from the active profile.
+**Update**: `docs/tools.md`, `docs/configuration.md`, `docs/architecture.md` — synced graph tool descriptions and `WithInstructions` guidance.
 **Update**: `internal/profile/profile.go` — empty/nil `allowed_source_types` or `allowed_target_types` on a relationship is now treated as "any type allowed" (wildcard), matching the intuitive semantics for minimal profiles.
 **Update**: `internal/graph/graph.go` — the `superseded_deps` integrity check identifies supersession relationships from profile invariants whose `relationship` name contains `"supersede"` (case-insensitive) and whose `direction` is `"outgoing"`. This works with the design's canonical P3 shape (`max: 1`) as well as `max: 0` and any other cardinality, and avoids misclassifying non-supersession relationships that happen to have a bounded outgoing cardinality. If no such invariant is present, the check is skipped to avoid false negatives.
 **Update**: `internal/graph/graph_test.go` — added `TestBuildSupersededRels` covering canonical `max: 1`, `max: 0`, case-insensitive match, supersede-variant names, and non-supersession exclusions; updated renamed-relationship supersession test to use a relationship name containing `"supersede"`; added `TestIntegrity_SupersededMaxOne` for the canonical P3 shape.

@@ -96,7 +96,7 @@ var graphConceptTool = mcp.NewTool("graph_concept",
 
 // graphRelationshipsTool returns outgoing and incoming relationships for a concept.
 var graphRelationshipsTool = mcp.NewTool("graph_relationships",
-	mcp.WithDescription("Return outgoing and incoming relationships for a concept"),
+	mcp.WithDescription("Return direct one-hop incoming/outgoing edges for a known concept. Use graph_trace for transitive traversal."),
 	mcp.WithString("file_path",
 		mcp.Required(),
 		mcp.Description("Relative path of the concept document"),
@@ -111,7 +111,7 @@ var graphRelationshipsTool = mcp.NewTool("graph_relationships",
 
 // graphTraceTool traces upstream or downstream relationships from a concept.
 var graphTraceTool = mcp.NewTool("graph_trace",
-	mcp.WithDescription("Trace upstream or downstream relationships from a concept"),
+	mcp.WithDescription("Follow relationships transitively upstream/downstream from a known concept."),
 	mcp.WithString("file_path",
 		mcp.Required(),
 		mcp.Description("Relative path of the starting concept"),
@@ -130,7 +130,7 @@ var graphTraceTool = mcp.NewTool("graph_trace",
 
 // graphSearchTool searches for concepts by text query.
 var graphSearchTool = mcp.NewTool("graph_search",
-	mcp.WithDescription("Search for concepts by text query with optional type and tag filters"),
+	mcp.WithDescription("Find graph concepts by topic/type/tags. Use this when you don't yet know the file path."),
 	mcp.WithString("query",
 		mcp.Description("Search query"),
 	),
@@ -147,7 +147,7 @@ var graphSearchTool = mcp.NewTool("graph_search",
 
 // graphIntegrityTool checks the structural integrity of the graph.
 var graphIntegrityTool = mcp.NewTool("graph_integrity",
-	mcp.WithDescription("Check the structural integrity of the document graph"),
+	mcp.WithDescription("Audit graph structure for dangling links, orphans, profile violations and superseded dependencies."),
 	mcp.WithArray("checks",
 		mcp.Description(`Optional subset of checks: "dangling", "orphans", "profile_violations", "superseded_deps". Defaults to all.`),
 	),
@@ -156,7 +156,7 @@ var graphIntegrityTool = mcp.NewTool("graph_integrity",
 // graphCoverageTool reports how many source-type concepts are covered by
 // target-type concepts through a relationship.
 var graphCoverageTool = mcp.NewTool("graph_coverage",
-	mcp.WithDescription("Report coverage of target-type concepts from source-type concepts through a relationship"),
+	mcp.WithDescription("Test whether concepts of one type have a relationship path to another type."),
 	mcp.WithString("source_type",
 		mcp.Required(),
 		mcp.Description("Concept type of source nodes"),
@@ -172,7 +172,7 @@ var graphCoverageTool = mcp.NewTool("graph_coverage",
 
 // graphContextTool returns a bounded neighborhood around a concept.
 var graphContextTool = mcp.NewTool("graph_context",
-	mcp.WithDescription("Return the immediate or two-hop neighborhood of a concept"),
+	mcp.WithDescription("Return a bounded neighborhood intended for reasoning context when loading the entire graph would be excessive."),
 	mcp.WithString("file_path",
 		mcp.Required(),
 		mcp.Description("Relative path of the center concept"),
@@ -1166,8 +1166,8 @@ func main() {
 				"Start with `get_index` to see the tree and the OKF bundles in scope. "+
 				"Each indexed document carries a `bundle` field naming its OKF bundle. "+
 				"Then use `list_docs` (each entry tagged with `bundle`), `list_tags` to discover topics, `get_doc(topic, tags?)` to retrieve a document (scored by title/tag/description match), "+
-				"`validate_doc` to check conformance, `get_log` for change log entries (each tagged with its source `log.md` path), "+
-				"or the graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) to navigate and analyse relationships between documents. "+
+				"`validate_doc` to check conformance, `get_log` for change log entries (each tagged with its source `log.md` path). "+
+				"For graph work, use `graph_search` to discover concept paths by topic, `graph_concept` to inspect a known concept and its relationship types, `graph_relationships` for direct one-hop edges, `graph_trace` for transitive upstream/downstream chains, and `graph_context` to retrieve a bounded neighborhood for reasoning without loading the whole corpus. Use `graph_integrity` to find structural graph defects and `graph_coverage` to check whether concepts of one type reach concepts of another. Relationship types come from the active profile; if the vocabulary is unfamiliar, inspect `graph_concept` or `graph_relationships` rather than guessing type names. "+
 				"The server is launched with `--enable-hidden` to include dot-directories like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.",
 		),
 	)

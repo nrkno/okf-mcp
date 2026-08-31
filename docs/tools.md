@@ -355,7 +355,7 @@ Returns metadata and edge counts for a single concept (indexed document) identif
 
 ## `graph_relationships`
 
-Returns the outgoing and incoming relationships for a concept.
+Return direct one-hop incoming/outgoing edges for a known concept. Use `graph_trace` for transitive traversal.
 
 ### Parameters
 
@@ -401,7 +401,7 @@ Each incoming edge:
 
 ## `graph_trace`
 
-Traces upstream or downstream relationships from a starting concept using BFS, optionally filtering by relationship type and bounding depth.
+Follow relationships transitively upstream/downstream from a known concept.
 
 ### Parameters
 
@@ -441,7 +441,7 @@ Each step:
 
 ## `graph_search`
 
-Searches indexed concepts by text query, with optional type and tag filters. Results are scored using the same weighted token model as `get_doc`.
+Find graph concepts by topic/type/tags. Use this when you don't yet know the file path.
 
 ### Parameters
 
@@ -479,7 +479,7 @@ Same weighted-token model as `get_doc`: title 3×, tags 2×, description 1×. Ta
 
 ## `graph_integrity`
 
-Reports structural problems in the graph: dangling references, orphan concepts, profile type violations, cardinality violations, and superseded dependencies.
+Audit graph structure for dangling links, orphans, profile violations and superseded dependencies.
 
 ### Parameters
 
@@ -520,7 +520,7 @@ Each finding object:
 
 ## `graph_coverage`
 
-Checks whether concepts of one type have downstream paths to concepts of another type through a given relationship. The BFS traverses the relationship in both directions so that edges authored from the target side (e.g., `Implementation` → `Requirement`) are discovered when querying from the source side (`Requirement` → `Implementation`).
+Test whether concepts of one type have a relationship path to another type. The BFS traverses the relationship in both directions so that edges authored from the target side (e.g., `Implementation` → `Requirement`) are discovered when querying from the source side (`Requirement` → `Implementation`).
 
 ### Parameters
 
@@ -561,7 +561,7 @@ Each uncovered item:
 
 ## `graph_context`
 
-Returns a bounded context slice around a concept: the concept itself, its immediate neighbors, and optionally one more layer. The result is bounded by `max_results` to keep context retrieval compact.
+Return a bounded neighborhood intended for reasoning context when loading the entire graph would be excessive. The result includes the center concept, its immediate neighbors, and optionally one more layer, bounded by `max_results`.
 
 ### Parameters
 
