@@ -141,7 +141,7 @@ func resolveTarget(raw string, docDir string, corpusRoot string) (string, bool) 
 
 	var resolved string
 	if strings.HasPrefix(raw, "/") {
-		resolved = filepath.Clean(strings.TrimPrefix(raw, "/"))
+		resolved = filepath.Clean(filepath.Join(corpusRoot, strings.TrimPrefix(raw, "/")))
 	} else {
 		resolved = filepath.Clean(filepath.Join(docDir, raw))
 	}
@@ -151,9 +151,9 @@ func resolveTarget(raw string, docDir string, corpusRoot string) (string, bool) 
 		return "", false
 	}
 
-	// Keep the cleaned relative path. The corpus-root check above guarantees it
+	// Return the path relative to corpusRoot. The check above guarantees it
 	// does not escape corpusRoot.
-	return resolved, true
+	return rel, true
 }
 
 func isNonFileLink(raw string) bool {
