@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
+	"github.com/nrkno/plattform-okf-mcp/internal/profile"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"github.com/nrkno/plattform-okf-mcp/internal/validator"
 )
@@ -92,7 +93,7 @@ func newFixtureServer(t *testing.T, dir string, opts scanner.ScanOptions) *mcpte
 	t.Helper()
 
 	origIdx := idx
-	idx = index.New(dir, opts)
+	idx = index.New(dir, opts, profile.Default())
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
@@ -405,7 +406,7 @@ func TestGetDoc_NoMatch(t *testing.T) {
 // Constraint 4: owns its idx and its mcptest.NewServer. NOT t.Parallel().
 func TestGetDoc_EmptyIndex(t *testing.T) {
 	origIdx := idx
-	idx = index.New(t.TempDir(), scanner.ScanOptions{}) // empty dir — zero .md files
+	idx = index.New(t.TempDir(), scanner.ScanOptions{}, profile.Default()) // empty dir — zero .md files
 	t.Cleanup(func() { idx = origIdx })
 
 	// Own server that closes over the locally-set idx.
@@ -465,7 +466,7 @@ func TestGetDoc_InvalidMatch(t *testing.T) {
 func TestGetDoc_TagsAsString(t *testing.T) {
 	dir := setupFixtureDir(t)
 	origIdx := idx
-	idx = index.New(dir, scanner.ScanOptions{})
+	idx = index.New(dir, scanner.ScanOptions{}, profile.Default())
 	t.Cleanup(func() { idx = origIdx })
 
 	srv, err := mcptest.NewServer(t,
