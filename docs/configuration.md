@@ -115,7 +115,10 @@ Add a server entry to `opencode.json` and include all tool names in the `permiss
       "mcp__okf-mcp__graph_concept",
       "mcp__okf-mcp__graph_relationships",
       "mcp__okf-mcp__graph_trace",
-      "mcp__okf-mcp__graph_search"
+      "mcp__okf-mcp__graph_search",
+      "mcp__okf-mcp__graph_integrity",
+      "mcp__okf-mcp__graph_coverage",
+      "mcp__okf-mcp__graph_context"
     ]
   }
 }
@@ -156,6 +159,9 @@ The injected instructions frame okf-mcp as the primary way to find documentation
 8. **`graph_relationships`** — return outgoing/incoming relationships for a concept.
 9. **`graph_trace`** — trace upstream or downstream relationships from a concept.
 10. **`graph_search`** — search concepts by text query with optional type/tag filters.
+11. **`graph_integrity`** — report dangling references, orphans, profile violations, and superseded dependencies.
+12. **`graph_coverage`** — check whether concepts of one type reach concepts of another type through a relationship.
+13. **`graph_context`** — return a bounded neighborhood slice around a concept.
 
 The instructions also mention that the server is launched with `--enable-hidden` to include dot-directory bundles like `.opencode/`; VCS internals (`.git`, `.hg`, `.svn`) are always skipped.
 

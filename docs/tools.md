@@ -1,8 +1,8 @@
 ---
 type: API Reference
 title: MCP Tools Reference
-description: Complete reference for the MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, get_log, and the graph navigation tools (graph_concept, graph_relationships, graph_trace, graph_search) — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
-tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, graph-concept, graph-relationships, graph-trace, graph-search, mcp, scoring, match, multi-bundle, bundle, graph]
+description: Complete reference for the thirteen MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, get_log, and the graph tools (graph_concept, graph_relationships, graph_trace, graph_search, graph_integrity, graph_coverage, graph_context) — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
+tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, graph-concept, graph-relationships, graph-trace, graph-search, graph-integrity, graph-coverage, graph-context, mcp, scoring, match, multi-bundle, bundle, graph]
 timestamp: 2026-08-31T00:00:00Z
 ---
 
@@ -474,3 +474,120 @@ Each concept:
 ### Scoring
 
 Same weighted-token model as `get_doc`: title 3×, tags 2×, description 1×. Tag-filter failures (score `-1`) are excluded. An empty `query` returns all concepts that pass the type/tag filters with score `0`.
+
+---
+
+## `graph_integrity`
+
+Reports structural problems in the graph: dangling references, orphan concepts, profile type violations, cardinality violations, and superseded dependencies.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `checks` | string[] | no | all | Subset of: `"dangling"`, `"orphans"`, `"profile_violations"`, `"superseded_deps"` |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `summary.dangling_refs` | int | Number of dangling-reference findings |
+| `summary.orphan_concepts` | int | Number of orphan-concept findings |
+| `summary.profile_violations` | int | Number of profile type/cardinality findings |
+| `summary.superseded_deps` | int | Number of superseded-dependency findings |
+| `summary.total_findings` | int | Sum of all findings |
+| `findings` | array | Individual findings (see below) |
+| `profile_loaded` | bool | `true` when a non-default profile is loaded |
+
+Each finding object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `check` | string | Check name |
+| `severity` | string | `"error"`, `"warning"`, or `"notification"` |
+| `source` | string | Source file path (or concept path) |
+| `target` | string | Target file path, when applicable |
+| `heading` | string | Heading context, when applicable |
+| `message` | string | Human-readable description |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| Unknown check in `checks` | `unknown check "<value>"` |
+
+---
+
+## `graph_coverage`
+
+Checks whether concepts of one type have downstream paths to concepts of another type through a given relationship. The BFS traverses the relationship in both directions so that edges authored from the target side (e.g., `Implementation` → `Requirement`) are discovered when querying from the source side (`Requirement` → `Implementation`).
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `source_type` | string | **yes** | — | Concept type to start from (e.g. `"Requirement"`) |
+| `target_type` | string | **yes** | — | Concept type to reach (e.g. `"Implementation"`) |
+| `relationship` | string | no | `""` (all types) | Follow only edges of this type |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source_type` | string | Source concept type |
+| `target_type` | string | Target concept type |
+| `total_sources` | int | Total number of source-type concepts |
+| `covered` | int | Number of source concepts that reach at least one target |
+| `uncovered` | int | Number of source concepts that reach no targets |
+| `coverage_ratio` | number | `covered / total_sources` (0.0–1.0) |
+| `uncovered_items` | array | Source concepts with no path to a target |
+
+Each uncovered item:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path of the uncovered concept |
+| `title` | string | Concept title |
+| `nearest_targets` | string[] | Always `[]` for uncovered items |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `source_type` missing | `source_type is required` |
+| `target_type` missing | `target_type is required` |
+
+---
+
+## `graph_context`
+
+Returns a bounded context slice around a concept: the concept itself, its immediate neighbors, and optionally one more layer. The result is bounded by `max_results` to keep context retrieval compact.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Center concept |
+| `depth` | number | no | `1` | Neighborhood depth (`1` or `2`) |
+| `max_results` | number | no | `100` | Maximum total neighbor entries across all directions and depths (`1`–`1000`) |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `center` | object | `{file_path, type, title}` of the center concept |
+| `neighbors.upstream` | array | Incoming neighbors as `{file_path, type, via}` objects |
+| `neighbors.downstream` | array | Outgoing neighbors as `{file_path, type, via}` objects |
+| `depth` | int | Requested depth |
+| `total_neighbors` | int | Number of neighbors returned |
+| `max_results` | int | Requested budget |
+| `truncated` | bool | `true` when the budget was exhausted |
+
+Neighbors are collected deterministically: upstream first, then downstream, alphabetical by `file_path` within each direction. The center concept does not count against the `max_results` budget. At `depth=2`, depth-1 neighbors are collected first, then remaining budget is allocated to depth-2 neighbors.
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Concept not found | `concept not found: "<path>"` |

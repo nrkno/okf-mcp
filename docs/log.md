@@ -10,6 +10,12 @@ timestamp: 2026-08-31T00:00:00Z
 
 ## 2026-08-31
 
+**Update**: `AGENTS.md` — recorded invariants I-20 through I-31; added `internal/graph`, `internal/linkextract`, and `internal/profile` to the package table; updated overview and key-documentation summary to reflect thirteen tools.
+**Update**: `docs/architecture.md` — documented `internal/graph`, `internal/linkextract`, and `internal/profile`; added the graph-projection data model and profile-loading sections; extended the invariants table to I-1→I-31.
+**Update**: `docs/tools.md` — documented `graph_integrity`, `graph_coverage`, and `graph_context`; updated frontmatter and intro to reference all thirteen tools and seven graph tools.
+**Update**: `docs/configuration.md` — added permission strings for `graph_integrity`, `graph_coverage`, and `graph_context`; updated auto-registration tool list to all thirteen tools.
+**Update**: `docs/index.md` — updated the MCP Tools Reference link to note all thirteen tools and the seven graph tools.
+**Note**: `docs/architecture/design/graph-projection.md` states that the `internal/index.New()` signature change affects 9 call sites, but the actual count is 29. Flagged here per scope; the design doc was not edited.
 **Creation**: `graph_concept` MCP tool — returns metadata and edge counts for a single concept by relative `file_path`.
 **Creation**: `graph_relationships` MCP tool — returns outgoing and incoming relationships for a concept, with optional `direction` and `type` filters.
 **Creation**: `graph_trace` MCP tool — BFS traversal of upstream or downstream relationships from a starting concept, with optional `type` filter and `max_depth` clamped to 1–20.
