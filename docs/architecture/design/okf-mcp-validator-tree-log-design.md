@@ -689,6 +689,17 @@ No speculative elements found.
 | Watcher for live validation                         | No auto re-validation on file change                                       | Yes — watcher in "Not this"; scan-on-every-call sufficient |
 | Double-rebuild elimination in ValidateBundle         | `ValidateBundle` calls `idx.Rebuild()` even when caller already did        | Yes — millisecond scan, functionally correct, not worth coupling to caller's state |
 
+## Dependencies
+
+- [Architecture](/docs/architecture.md) — the invariant framework this design extends (I-4 modified, I-8 through I-16 added)
+
+## Related
+
+- [Multi-Bundle Support](multi-bundle-support.md) — `--enable-hidden` composes with `--validate` for hidden-bundle validation
+- [MCP Tools Reference](/docs/tools.md) — `validate_doc`, `get_index`, and `get_log` tool definitions
+- [Deployment](/docs/deployment.md) — CLI `--validate` usage, pre-commit hook installation
+- [Configuration](/docs/configuration.md) — `--validate` and `--enable-hidden` CLI flag registration
+
 ## Log
 
 - 2026-07-17: Initial design — scanner reservation (ScanAll), validator package (E1/E2/E3 + contextual), bundle tree (get_index), structured log (get_log), CLI --validate, pre-commit hook, 7 new invariants (I-8 through I-14).

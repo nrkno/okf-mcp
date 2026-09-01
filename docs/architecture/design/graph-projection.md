@@ -1348,6 +1348,17 @@ Each invariant (I-20 through I-29) maps to at least one test:
 | Richer path-pattern coverage queries | v2 | Non-blocking future consideration; current type-to-type coverage is sufficient for v1 | Coverage queries filter by source/target type only; path-pattern matching (e.g., "must pass through Design before reaching Implementation") deferred |
 | Sub-document / fragment graph nodes | **Excluded from v1** | Explicitly NOT in v1. If broader OKF use cases later justify addressable sub-concepts (sections, headings, paragraphs as independent graph nodes), treat that as an independent generic feature | All graph nodes are whole documents. Headings are used for edge classification, not as addressable nodes. This keeps the graph model simple and avoids premature commitment to a sub-document addressing scheme |
 
+## Dependencies
+
+- [Architecture](/docs/architecture.md) — the invariant framework this design extends (I-20 through I-31) and the package structure it builds on
+
+## Related
+
+- [MCP Tools Reference](/docs/tools.md) — the 7 graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`)
+- [Configuration](/docs/configuration.md) — `--profile` CLI flag and host registration for graph tools
+- [OKF Standard](/docs/okf-standard.md) — the document structure the graph projection reads from
+- [Deployment](/docs/deployment.md) — profile file loading and build instructions
+
 ## Log
 
 ### 2026-08-31

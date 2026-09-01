@@ -1,0 +1,50 @@
+name: "plattform-okf-mcp"
+version: "1.0"
+
+concept_types:
+  - name: "Architecture"
+    aliases: ["architecture", "system-design"]
+  - name: "Playbook"
+    aliases: ["playbook", "runbook", "how-to"]
+  - name: "Configuration"
+    aliases: ["configuration", "setup"]
+  - name: "API Reference"
+    aliases: ["api-reference", "reference"]
+  - name: "Metrics Reference"
+    aliases: ["metrics-reference", "metrics"]
+  - name: "Log"
+
+relationships:
+  - name: "references"
+    heading_aliases: ["See also", "References", "Related", "Related work", "Running"]
+    inverse: "referenced_by"
+    allowed_source_types: ["*"]
+    allowed_target_types: ["*"]
+
+  - name: "depends_on"
+    heading_aliases: ["Depends on", "Dependencies", "Requires"]
+    inverse: "depended_on_by"
+    allowed_source_types: ["*"]
+    allowed_target_types: ["*"]
+
+  - name: "implements"
+    heading_aliases: ["Implements", "Implementation of", "Realizes"]
+    inverse: "implemented_by"
+    allowed_source_types: ["*"]
+    allowed_target_types: ["Architecture", "Configuration", "API Reference"]
+
+  - name: "supersedes"
+    heading_aliases: ["Supersedes", "Replaces", "Obsoletes"]
+    inverse: "superseded_by"
+    allowed_source_types: ["*"]
+    allowed_target_types: ["*"]
+
+invariants:
+  - id: "P1"
+    description: "Supersession is one-to-one: no document should supersede more than one predecessor."
+    source_type: "*"
+    relationship: "supersedes"
+    direction: "outgoing"
+    min: 0
+    max: 1
+    severity: "warning"
