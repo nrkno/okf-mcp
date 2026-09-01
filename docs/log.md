@@ -3,10 +3,16 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-08-31T00:00:00Z
+timestamp: 2026-09-01T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-09-01
+
+**Creation**: `docs/okf-profile-format.md` — complete schema reference for `.okf-profile.yaml`, including concept types, relationships, invariants, heading classification, worked example, loading order, and validation errors.
+**Update**: `README.md` — tool count bumped to thirteen, `--profile` flag documented, permissions updated to all thirteen tools, and new Graph tools + Profile sections added.
+**Update**: `docs/index.md` — added link to the OKF Profile Format reference.
 
 ## 2026-08-31
 
