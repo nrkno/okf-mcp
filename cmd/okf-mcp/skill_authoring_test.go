@@ -290,6 +290,46 @@ func TestOKFAuthoringPublishedEvalShape(t *testing.T) {
 	}
 }
 
+// Editorial regression for the published rubrics, not a model-judge execution.
+// Prompts supply a date, not an instant, and profile names are optional.
+func TestOKFAuthoringOracleFairness(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join(findModuleRoot(t), "skills", "okf-authoring", "evals", "cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	corpus, err := decodeOKFAuthoringEvalCorpus(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]okfAuthoringEvalCase{}
+	for _, c := range corpus.Cases {
+		cases[c.ID] = c
+	}
+	for _, tc := range []struct {
+		id                  string
+		required, forbidden []string
+	}{
+		{"mixed-corpus-authoring", []string{"parseable complete profile YAML", "required version 1.0", "profile name is optional"}, []string{"nonempty name"}},
+		{"current-log-entry", []string{"valid complete Markdown artifacts", "valid ISO timestamp dated 2026-10-10", "any supported time of day", "unchanged 2026-10-09 Creation history"}, []string{"2026-10-10T00:00:00Z"}},
+		{"portable-install-and-tool-absence", []string{"complete valid document", "valid ISO timestamp dated 2026-10-10", "any supported time of day", "unchanged accepted body/link"}, []string{"2026-10-10T00:00:00Z"}},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			oracle := strings.Join(cases[tc.id].Expectations, "\n")
+			for _, required := range tc.required {
+				if !strings.Contains(oracle, required) {
+					t.Fatalf("missing fairness/artifact criterion: %s", required)
+				}
+			}
+			for _, forbidden := range tc.forbidden {
+				if strings.Contains(oracle, forbidden) {
+					t.Fatalf("unsupported oracle constraint: %s", forbidden)
+				}
+			}
+		})
+	}
+}
+
 func TestOKFAuthoringValidatorBoundaries(t *testing.T) {
 	dir := t.TempDir()
 	write := func(path, content string) string {

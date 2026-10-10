@@ -3,12 +3,14 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-10-10T21:10:00Z
+timestamp: 2026-10-10T21:20:00Z
 ---
 
 # Directory Update Log
 
 ## 2026-10-10
+
+**Update**: `skills/okf-authoring/evals/cases.json`, `cmd/okf-mcp/skill_authoring_test.go` — Removed unsupported midnight-only timestamp and mandatory profile-name oracle constraints. Rubrics accept supported scenario-date ISO timestamps and optional profile names while retaining required version, valid inline artifacts, preserved content/history and inventory checks. Added an editorial rubric regression, not a model-judge execution or live usefulness result.
 
 **Update**: [Portable OKF Authoring Skill](/docs/okf-authoring.md), [OKF Profile Format](/docs/okf-profile-format.md), `skills/okf-authoring/`, `cmd/okf-mcp/skill_authoring_test.go`, `cmd/okf-mcp/profile_docs_test.go` — Added practical mixed-corpus vocabulary selection and justified omissions, artifact-focused fair inline evals, portable profile setup, and real-MCP walkthrough regressions. Separated published package version/shape checks from central loader support; formatting-only assessment unchanged. No live paid ablation or native integration result is claimed.
 
