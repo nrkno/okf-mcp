@@ -3,7 +3,7 @@ type: Playbook
 title: Portable OKF Authoring Skill
 description: Install and maintain the reusable okf-authoring skill, its formatting-only assessment, synchronized portable references, and artifact checks.
 tags: [okf, skill, authoring, installation, assessment, references]
-timestamp: 2026-10-10T00:00:00Z
+timestamp: 2026-10-10T19:41:00Z
 ---
 
 # Portable OKF authoring skill
@@ -38,8 +38,10 @@ The skill separately requires index completeness and current-date log entries, w
 
 `skills/okf-authoring/evals/cases.json` defines observable positive/negative expectations for profile mismatch, missing index entries, stale logs, nested bundles/native metadata, substantive-review negative space and offline portable use. These are eval inputs, **not claimed ablation results**. The actual invalid-profile incident (missing relationship, conflicting direction and null maximum) provides RED evidence; it is not a fabricated baseline run of this skill.
 
+The corpus envelope is `skill: "okf-authoring"`, `version: "1.0.0"`, `shape: 1`, and a `cases` array. Each case has a unique `id` and `name`, concrete `trap`, inline-response `prompt`, and nonempty string arrays `expectations` and `negative_expectations`. Incident lineage belongs in the trap prose, not an unsupported metadata key. Prompts require no filesystem or shell mutations; actual native skill loading needs separate central integration evidence.
+
 ```sh
 go test -race ./cmd/okf-mcp -run 'TestOKFAuthoring' -count=1
 ```
 
-Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.
+Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. Strict corpus checks reject missing/incorrect fields and types, empty expectations, duplicate identities and legacy ad-hoc keys; malformed-contract tests exercise these rejection paths. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.

@@ -1,54 +1,71 @@
 {
-  "description": "Artifact/action expectations for skill evaluation. Cases are specifications, not recorded ablation or baseline results.",
+  "skill": "okf-authoring",
+  "version": "1.0.0",
+  "shape": 1,
   "cases": [
     {
       "id": "directional-allow-lists",
-      "request": "Accepted content: requirement.md (type: requirement) links to anchor.md (type: anchor) under Derived from. The profile loads with inverse derives but allowed_source_types: [anchor] and allowed_target_types: [requirement]. Assess formatting, then show the corrected representation and a valid near-miss check.",
-      "expect": ["Identify requirement as link-containing source and anchor as linked target", "Flag both swapped lists; correct to source [requirement] and target [anchor]", "Keep forward constraints unchanged when querying incoming derives", "Check exact frontmatter values; Requirement or a concept alias is not requirement", "Observe graph type warnings separately from document conformance"],
-      "reject": ["Approve swapped lists because the inverse reads anchor derives requirement", "Decide whether the requirement is substantively justified", "Claim profile loading proves type compatibility"]
+      "name": "Correct swapped relationship allow-lists",
+      "trap": "A loaded profile and a readable inverse can conceal source/target allow-lists swapped against the written Markdown link. Cases specify expected responses, not recorded ablation results.",
+      "prompt": "Accepted content: requirement.md (type: requirement) links to anchor.md (type: anchor) under Derived from. The profile loads with inverse derives but allowed_source_types: [anchor] and allowed_target_types: [requirement]. Assess formatting, then show the corrected representation and a valid near-miss check inline.",
+      "expectations": ["Identify requirement as link-containing source and anchor as linked target", "Flag both swapped lists; correct to source [requirement] and target [anchor]", "Keep forward constraints unchanged when querying incoming derives", "Check exact frontmatter values; Requirement or a concept alias is not requirement", "Distinguish expected graph type warnings from document conformance without claiming unexecuted checks"],
+      "negative_expectations": ["Approve swapped lists because the inverse reads anchor derives requirement", "Decide whether the requirement is substantively justified", "Claim profile loading proves type compatibility"]
     },
     {
       "id": "incoming-checked-node-selector",
-      "request": "Accepted obligation: each anchor must have an incoming derived-from link from a requirement. requirement.md links to anchor.md. The invariant uses source_type: requirement, relationship: derives, direction: incoming, min: 1, max: -1. Correct the representation without inventing obligations.",
-      "expect": ["Select anchor with source_type because it is the checked node", "Use forward relationship derived-from for incoming counts", "Keep allowed_source_types [requirement] and allowed_target_types [anchor]", "Exercise valid anchor incoming count and a missing-link case"],
-      "reject": ["Select requirement merely because the field is named source_type", "Use displayed inverse derives as the invariant relationship", "Reverse the written Markdown link to make the rule pass"]
+      "name": "Select the checked node for incoming invariants",
+      "trap": "The invariant field source_type looks like the edge source selector, and the displayed inverse looks like the counting relationship.",
+      "prompt": "Accepted obligation: each anchor must have an incoming derived-from link from a requirement. requirement.md links to anchor.md. The invariant uses source_type: requirement, relationship: derives, direction: incoming, min: 1, max: -1. Show the corrected representation inline without inventing obligations.",
+      "expectations": ["Select anchor with source_type because it is the checked node", "Use forward relationship derived-from for incoming counts", "Keep allowed_source_types [requirement] and allowed_target_types [anchor]", "Show the expected valid anchor incoming count and a missing-link case"],
+      "negative_expectations": ["Select requirement merely because the field is named source_type", "Use displayed inverse derives as the invariant relationship", "Reverse the written Markdown link to make the rule pass"]
     },
     {
       "id": "profile-schema-incident",
-      "origin": "Observed repository incident: explicit profile loading failed because requirement-has-source omitted relationship, used incoming despite its outgoing description, and max:null with min:1.",
-      "request": "Our documentation says OKF validation passes but the requirement links are untyped. Configure the repository profile from the existing relationships.",
-      "expect": ["Inspect selected profile and server capabilities", "Derive fields from accepted outgoing-source obligation", "Use explicit relationship and intentional unlimited bound", "Observe profile loading and graph checks"],
-      "reject": ["Claim no profile support from an older checkout", "Treat CLI conformance success as graph enforcement", "Invent relationships just to make coverage pass"]
+      "name": "Repair the observed profile schema failure",
+      "trap": "Observed repository incident: explicit profile loading failed because requirement-has-source omitted relationship, used incoming despite its outgoing description, and max:null with min:1. CLI conformance success concealed missing graph enforcement; this is incident lineage, not an ablation result.",
+      "prompt": "Our documentation says OKF validation passes but the requirement links are untyped. The requirement-has-source invariant omits relationship, uses incoming despite its accepted outgoing-source description, and has max:null with min:1. Explain how to configure the repository profile from the existing relationships, showing corrected fields inline and the checks needed before claiming success.",
+      "expectations": ["Identify the selected profile and server capabilities as evidence to inspect", "Derive fields from accepted outgoing-source obligation", "Use explicit relationship and intentional unlimited bound", "Require observed profile loading and graph checks before claiming verified enforcement"],
+      "negative_expectations": ["Claim no profile support from an older checkout", "Treat CLI conformance success as graph enforcement", "Invent relationships just to make coverage pass"]
     },
     {
       "id": "index-missing-document",
-      "request": "a.md and b.md belong to the bundle. index.md has no frontmatter and links only a.md. validate_doc reports no index errors. Is its structure conformant?",
-      "expect": ["Flag b.md missing from the applicable index inventory despite validator success"],
-      "reject": ["Approve index completeness from validator success", "Add frontmatter to index.md"]
+      "name": "Detect incomplete index inventory despite validation",
+      "trap": "A green reserved-file validator is mistaken for proof that index.md inventories every owned document.",
+      "prompt": "a.md and b.md belong to the bundle. index.md has no frontmatter and links only a.md. validate_doc reports no index errors. Is its structure conformant?",
+      "expectations": ["Flag b.md missing from the applicable index inventory despite validator success"],
+      "negative_expectations": ["Approve index completeness from validator success", "Add frontmatter to index.md"]
     },
     {
       "id": "current-log-entry",
-      "request": "Today a.md changed. log.md has valid Log frontmatter and ordered entries but only an entry from yesterday.",
-      "expect": ["Flag absent current-date entry for a.md", "Update applicable edit timestamp without rewriting historical entries"],
-      "reject": ["Claim date-order notification checks log currency"]
+      "name": "Detect stale log currency",
+      "trap": "Valid Log metadata and chronological ordering are mistaken for a current entry documenting today's change.",
+      "prompt": "Today a.md changed. log.md has valid Log frontmatter and ordered entries but only an entry from yesterday. Assess formatting and show the needed correction inline.",
+      "expectations": ["Flag absent current-date entry for a.md", "Show the applicable edit timestamp update without rewriting historical entries"],
+      "negative_expectations": ["Claim date-order notification checks log currency"]
     },
     {
       "id": "nested-bundle-and-native-skill",
-      "request": "Parent docs and nested child docs each have an index. Add a native SKILL.md with name/description beside its reference material and check formatting.",
-      "expect": ["Resolve parent/child ownership before inventory checks", "Keep native skill metadata separate from OKF document frontmatter", "Validate intentionally published reference documents in their own scope"],
-      "reject": ["Flatten every child document into the parent index", "Force type into native SKILL.md to silence a wrongly scoped validator"]
+      "name": "Keep nested bundle and native skill metadata distinct",
+      "trap": "Flattening nested ownership or treating native skill metadata as OKF frontmatter can produce a superficially green but incorrect inventory.",
+      "prompt": "Parent docs and nested child docs each have an index. Show inline how to add a native SKILL.md with name/description beside its reference material and explain the formatting checks.",
+      "expectations": ["Resolve parent/child ownership before inventory checks", "Keep native skill metadata separate from OKF document frontmatter", "Scope validation of intentionally published reference documents to their own bundle"],
+      "negative_expectations": ["Flatten every child document into the parent index", "Force type into native SKILL.md to silence a wrongly scoped validator"]
     },
     {
       "id": "content-review-negative-space",
-      "request": "Formatting, index coverage, current log and profile checks are correct, but this architectural argument seems technically wrong. Use the assessment.",
-      "expect": ["Assess structural conformance only", "Report substantive correctness as outside this assessment"],
-      "reject": ["Approve the architectural claim from green formatting checks", "Rewrite its substantive meaning during formatting review"]
+      "name": "Keep formatting assessment out of substantive review",
+      "trap": "Formatting success is promoted to architectural approval, or formatting review silently rewrites accepted substantive meaning.",
+      "prompt": "Formatting, index coverage, current log and profile checks are correct, but this architectural argument seems technically wrong. Explain the boundary of the OKF formatting assessment.",
+      "expectations": ["Assess structural conformance only", "Report substantive correctness as outside this assessment"],
+      "negative_expectations": ["Approve the architectural claim from green formatting checks", "Rewrite its substantive meaning during formatting review"]
     },
     {
       "id": "portable-install-and-tool-absence",
-      "request": "Install this skill in a different repository with no source checkout and an unavailable MCP server, then author an OKF document.",
-      "expect": ["Resolve direct references from the skill directory", "Use target repository rules and local inventory", "Mark runtime verification unproven"],
-      "reject": ["Require implementation paths in the authoring source repo", "Invent successful validation output"]
+      "name": "Author portably with unavailable runtime tooling",
+      "trap": "A portable installation depends on source-repository paths or invents successful validation when MCP is unavailable.",
+      "prompt": "Explain how to install this skill in a different repository with no source checkout and an unavailable MCP server, then show an OKF document inline. Explain which target rules and inventory you need and what remains unverified.",
+      "expectations": ["Resolve direct references from the skill directory", "Use target repository rules and local inventory", "Mark runtime verification unproven"],
+      "negative_expectations": ["Require implementation paths in the authoring source repo", "Invent successful validation output"]
     }
   ]
 }

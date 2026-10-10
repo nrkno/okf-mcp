@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -52,26 +55,18 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	if !fm.HasFrontmatter || yaml.Unmarshal([]byte(fm.YAMLBlock), &metadata) != nil || metadata.Name != "okf-authoring" || metadata.Description == "" || metadata.Type != "" {
 		t.Fatalf("invalid native skill metadata: %+v", metadata)
 	}
-	var cases struct {
-		Cases []struct {
-			ID, Request    string
-			Expect, Reject []string
-		}
-	}
-	if err := json.Unmarshal([]byte(read(filepath.Join(base, "evals", "cases.json"))), &cases); err != nil {
+	cases, err := decodeOKFAuthoringEvalCorpus([]byte(read(filepath.Join(base, "evals", "cases.json"))))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases.Cases) < 6 {
+	if len(cases.Cases) != 8 {
 		t.Fatal("missing decision-boundary eval cases")
 	}
 	seen := map[string]bool{}
 	for _, c := range cases.Cases {
-		if c.ID == "" || seen[c.ID] || c.Request == "" || len(c.Expect) == 0 || len(c.Reject) == 0 {
-			t.Fatalf("incomplete or duplicate eval case: %+v", c)
-		}
 		seen[c.ID] = true
 	}
-	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector"} {
+	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector", "profile-schema-incident", "index-missing-document", "current-log-entry", "nested-bundle-and-native-skill", "content-review-negative-space", "portable-install-and-tool-absence"} {
 		if !seen[id] {
 			t.Fatalf("missing source/target decision-boundary eval: %s", id)
 		}
@@ -79,7 +74,7 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	// Install a real copy away from the source repository; every live local link
 	// must resolve within this package, not through ../../docs or implementation paths.
 	installed := t.TempDir()
-	err := filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -139,6 +134,134 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	result := validator.ValidateBundle(idx)
 	if result.Summary.Errors != 0 || len(idx.Docs()) != 0 {
 		t.Fatalf("whole-corpus validation should skip native/reference assets, not prove their conformance: %+v", result)
+	}
+}
+
+// This checks the user-supplied artifact contract, not live skill value or native
+// integration. The central evaluation harness owns those executions.
+type okfAuthoringEvalCase struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Trap                 string   `json:"trap"`
+	Prompt               string   `json:"prompt"`
+	Expectations         []string `json:"expectations"`
+	NegativeExpectations []string `json:"negative_expectations"`
+}
+
+type okfAuthoringEvalCorpus struct {
+	Skill   string                 `json:"skill"`
+	Version string                 `json:"version"`
+	Shape   int                    `json:"shape"`
+	Cases   []okfAuthoringEvalCase `json:"cases"`
+}
+
+func decodeOKFAuthoringEvalCorpus(data []byte) (okfAuthoringEvalCorpus, error) {
+	var corpus okfAuthoringEvalCorpus
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&corpus); err != nil {
+		return corpus, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return corpus, fmt.Errorf("expected one corpus JSON value, got %v", err)
+	}
+	if corpus.Skill != "okf-authoring" || corpus.Version != "1.0.0" || corpus.Shape != 1 || len(corpus.Cases) == 0 {
+		return corpus, fmt.Errorf("invalid skill/version/shape/cases envelope")
+	}
+	ids, names := map[string]bool{}, map[string]bool{}
+	for i, c := range corpus.Cases {
+		for field, value := range map[string]string{"id": c.ID, "name": c.Name, "trap": c.Trap, "prompt": c.Prompt} {
+			if strings.TrimSpace(value) == "" {
+				return corpus, fmt.Errorf("case %d requires nonempty %s", i, field)
+			}
+		}
+		if ids[c.ID] || names[c.Name] {
+			return corpus, fmt.Errorf("case %d duplicates id or name", i)
+		}
+		ids[c.ID], names[c.Name] = true, true
+		for field, values := range map[string][]string{"expectations": c.Expectations, "negative_expectations": c.NegativeExpectations} {
+			if len(values) == 0 {
+				return corpus, fmt.Errorf("case %d requires nonempty %s", i, field)
+			}
+			for _, value := range values {
+				if strings.TrimSpace(value) == "" {
+					return corpus, fmt.Errorf("case %d has empty %s item", i, field)
+				}
+			}
+		}
+	}
+	return corpus, nil
+}
+
+func TestOKFAuthoringEvalContract(t *testing.T) {
+	t.Parallel()
+	const valid = `{"skill":"okf-authoring","version":"1.0.0","shape":1,"cases":[{"id":"example","name":"Example boundary","trap":"Green validation hides missing inventory","prompt":"Assess the incomplete index inline","expectations":["Flag missing document"],"negative_expectations":["Approve from validator success"]}]}`
+	if _, err := decodeOKFAuthoringEvalCorpus([]byte(valid)); err != nil {
+		t.Fatalf("valid contract rejected: %v", err)
+	}
+	checkMutation := func(name string, mutate func(map[string]any, map[string]any)) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			var envelope map[string]any
+			if err := json.Unmarshal([]byte(valid), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			c := envelope["cases"].([]any)[0].(map[string]any)
+			mutate(envelope, c)
+			data, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := decodeOKFAuthoringEvalCorpus(data); err == nil {
+				t.Fatalf("malformed contract accepted: %s", data)
+			}
+		})
+	}
+	for _, field := range []string{"skill", "version", "shape", "cases"} {
+		checkMutation("missing envelope "+field, func(e, _ map[string]any) { delete(e, field) })
+		checkMutation("null envelope "+field, func(e, _ map[string]any) { e[field] = nil })
+		checkMutation("wrong envelope type "+field, func(e, _ map[string]any) { e[field] = true })
+	}
+	for _, field := range []string{"id", "name", "trap", "prompt", "expectations", "negative_expectations"} {
+		checkMutation("missing case "+field, func(_, c map[string]any) { delete(c, field) })
+		checkMutation("null case "+field, func(_, c map[string]any) { c[field] = nil })
+		checkMutation("wrong case type "+field, func(_, c map[string]any) { c[field] = 1 })
+	}
+	for _, field := range []string{"id", "name", "trap", "prompt"} {
+		checkMutation("blank "+field, func(_, c map[string]any) { c[field] = " \n" })
+	}
+	for _, field := range []string{"expectations", "negative_expectations"} {
+		for _, value := range []any{[]any{}, []any{" "}, []any{nil}, []any{1}, "not an array"} {
+			checkMutation(fmt.Sprintf("invalid %s %v", field, value), func(_, c map[string]any) { c[field] = value })
+		}
+	}
+	for _, field := range []string{"description", "request", "expect", "reject", "origin"} {
+		checkMutation("legacy envelope "+field, func(e, _ map[string]any) { e[field] = "legacy" })
+		checkMutation("legacy case "+field, func(_, c map[string]any) { c[field] = "legacy" })
+	}
+	checkMutation("wrong skill", func(e, _ map[string]any) { e["skill"] = "another-skill" })
+	checkMutation("wrong version", func(e, _ map[string]any) { e["version"] = "2.0.0" })
+	checkMutation("wrong shape", func(e, _ map[string]any) { e["shape"] = 2 })
+	checkMutation("fractional shape", func(e, _ map[string]any) { e["shape"] = 1.5 })
+	checkMutation("empty cases", func(e, _ map[string]any) { e["cases"] = []any{} })
+	checkMutation("null case", func(e, _ map[string]any) { e["cases"] = []any{nil} })
+	for _, field := range []string{"id", "name"} {
+		checkMutation("duplicate "+field, func(e, c map[string]any) {
+			other := map[string]any{}
+			for k, v := range c {
+				other[k] = v
+			}
+			other["id"], other["name"] = "second", "Second boundary"
+			other[field] = c[field]
+			e["cases"] = []any{c, other}
+		})
+	}
+	for _, suffix := range []string{` {}`, ` trailing`} {
+		t.Run("trailing JSON "+suffix, func(t *testing.T) {
+			if _, err := decodeOKFAuthoringEvalCorpus([]byte(valid + suffix)); err == nil {
+				t.Fatal("trailing input accepted")
+			}
+		})
 	}
 }
 
