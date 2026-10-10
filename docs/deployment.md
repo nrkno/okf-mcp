@@ -3,7 +3,7 @@ type: Playbook
 title: Deployment
 description: How to build, install, run, test, validate, and release okf-mcp — from local development to production binaries.
 tags: [deployment, build, release, go, binary, install, validate, pre-commit]
-timestamp: 2026-07-18T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Deployment
@@ -86,7 +86,7 @@ The binary reads all `.md` files, checks frontmatter conformance, and prints fin
 
 ### Pre-commit hook
 
-A pre-commit hook is included at `.githooks/pre-commit` that validates the entire bundle before each commit. Install it with:
+A pre-commit hook is included at `.githooks/pre-commit` that validates the indexed corpus and reserved files before each commit. It silently omits files without an indexed type, including native skill metadata. Its success does not prove complete document inventory, index completeness or current-date log coverage; see [Portable OKF Authoring Skill](/docs/okf-authoring.md). Install it with:
 
 ```sh
 git config core.hooksPath .githooks

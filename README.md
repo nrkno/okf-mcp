@@ -10,6 +10,8 @@ The index is rebuilt on each call, so newly added or updated documents are refle
 
 **Frontmatter quality is a functional requirement.** A missing or vague `description` means the wrong document gets returned, or none at all. Treat `title`, `description`, and `tags` as part of the feature, not optional metadata.
 
+For reusable agent methodology, install the [portable OKF authoring skill](docs/okf-authoring.md). It includes a formatting-focused assessment and synchronized direct reference material without requiring this source checkout after installation.
+
 ## Installation
 
 Build from source:
@@ -26,7 +28,7 @@ go install github.com/nrkno/plattform-okf-mcp/cmd/okf-mcp@latest
 
 ## Pre-commit hook
 
-A git pre-commit hook is included in `.githooks/pre-commit`. It validates all OKF docs on every commit, catching frontmatter and structure errors before they land.
+A git pre-commit hook is included in `.githooks/pre-commit`. It validates indexed OKF documents and reserved files on every commit. Native skill metadata without an OKF type is not indexed; index completeness, skipped document inventory and log currency still require artifact inspection.
 
 Install the hook:
 

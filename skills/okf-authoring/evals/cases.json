@@ -1,0 +1,42 @@
+{
+  "description": "Artifact/action expectations for skill evaluation. Cases are specifications, not recorded ablation or baseline results.",
+  "cases": [
+    {
+      "id": "profile-schema-incident",
+      "origin": "Observed repository incident: explicit profile loading failed because requirement-has-source omitted relationship, used incoming despite its outgoing description, and max:null with min:1.",
+      "request": "Our documentation says OKF validation passes but the requirement links are untyped. Configure the repository profile from the existing relationships.",
+      "expect": ["Inspect selected profile and server capabilities", "Derive fields from accepted outgoing-source obligation", "Use explicit relationship and intentional unlimited bound", "Observe profile loading and graph checks"],
+      "reject": ["Claim no profile support from an older checkout", "Treat CLI conformance success as graph enforcement", "Invent relationships just to make coverage pass"]
+    },
+    {
+      "id": "index-missing-document",
+      "request": "a.md and b.md belong to the bundle. index.md has no frontmatter and links only a.md. validate_doc reports no index errors. Is its structure conformant?",
+      "expect": ["Flag b.md missing from the applicable index inventory despite validator success"],
+      "reject": ["Approve index completeness from validator success", "Add frontmatter to index.md"]
+    },
+    {
+      "id": "current-log-entry",
+      "request": "Today a.md changed. log.md has valid Log frontmatter and ordered entries but only an entry from yesterday.",
+      "expect": ["Flag absent current-date entry for a.md", "Update applicable edit timestamp without rewriting historical entries"],
+      "reject": ["Claim date-order notification checks log currency"]
+    },
+    {
+      "id": "nested-bundle-and-native-skill",
+      "request": "Parent docs and nested child docs each have an index. Add a native SKILL.md with name/description beside its reference material and check formatting.",
+      "expect": ["Resolve parent/child ownership before inventory checks", "Keep native skill metadata separate from OKF document frontmatter", "Validate intentionally published reference documents in their own scope"],
+      "reject": ["Flatten every child document into the parent index", "Force type into native SKILL.md to silence a wrongly scoped validator"]
+    },
+    {
+      "id": "content-review-negative-space",
+      "request": "Formatting, index coverage, current log and profile checks are correct, but this architectural argument seems technically wrong. Use the assessment.",
+      "expect": ["Assess structural conformance only", "Report substantive correctness as outside this assessment"],
+      "reject": ["Approve the architectural claim from green formatting checks", "Rewrite its substantive meaning during formatting review"]
+    },
+    {
+      "id": "portable-install-and-tool-absence",
+      "request": "Install this skill in a different repository with no source checkout and an unavailable MCP server, then author an OKF document.",
+      "expect": ["Resolve direct references from the skill directory", "Use target repository rules and local inventory", "Mark runtime verification unproven"],
+      "reject": ["Require implementation paths in the authoring source repo", "Invent successful validation output"]
+    }
+  ]
+}

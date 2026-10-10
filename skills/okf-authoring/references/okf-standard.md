@@ -1,11 +1,3 @@
----
-type: Architecture
-title: OKF Standard
-description: The Open Knowledge Format v0.1 document convention, indexing rules, reserved files, and distinction between validator checks and authoring obligations.
-tags: [okf, frontmatter, standard, conventions, index, log]
-timestamp: 2026-10-10T00:00:00Z
----
-
 # OKF Standard
 
 ## What OKF is
