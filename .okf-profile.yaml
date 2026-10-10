@@ -1,50 +1,107 @@
-name: "plattform-okf-mcp"
+# .okf-profile.yaml — AOS OKF Profile
+# Conforms to the generic okf-mcp profile schema.
+# Defines document-level concept types, canonical heading relationships, and
+# graph invariants for the Agentic OS traceable specification pipeline.
+name: aos
 version: "1.0"
 
 concept_types:
-  - name: "Architecture"
-    aliases: ["architecture", "system-design"]
-  - name: "Playbook"
-    aliases: ["playbook", "runbook", "how-to"]
-  - name: "Configuration"
-    aliases: ["configuration", "setup"]
-  - name: "API Reference"
-    aliases: ["api-reference", "reference"]
-  - name: "Metrics Reference"
-    aliases: ["metrics-reference", "metrics"]
-  - name: "Log"
+  - name: anchor
+  - name: requirement
+  - name: requirement-index
+  - name: decision
+  - name: design
+  - name: spec
+  - name: plan
 
 relationships:
-  - name: "references"
-    heading_aliases: ["See also", "References", "Related", "Related work", "Running"]
-    inverse: "referenced_by"
-    allowed_source_types: ["*"]
-    allowed_target_types: ["*"]
+  - name: derived-from
+    heading_aliases:
+      - Derived from
+    inverse: derives
+    allowed_source_types:
+      - requirement
+    allowed_target_types:
+      - anchor
 
-  - name: "depends_on"
-    heading_aliases: ["Depends on", "Dependencies", "Requires"]
-    inverse: "depended_on_by"
-    allowed_source_types: ["*"]
-    allowed_target_types: ["*"]
+  - name: satisfies
+    heading_aliases:
+      - Satisfies
+    inverse: satisfied-by
+    allowed_source_types:
+      - decision
+      - design
+      - spec
+    allowed_target_types:
+      - requirement
 
-  - name: "implements"
-    heading_aliases: ["Implements", "Implementation of", "Realizes"]
-    inverse: "implemented_by"
-    allowed_source_types: ["*"]
-    allowed_target_types: ["Architecture", "Configuration", "API Reference"]
+  - name: implements
+    heading_aliases:
+      - Implements
+    inverse: implemented-by
+    allowed_source_types:
+      - spec
+      - plan
+    allowed_target_types:
+      - decision
+      - design
+      - spec
 
-  - name: "supersedes"
-    heading_aliases: ["Supersedes", "Replaces", "Obsoletes"]
-    inverse: "superseded_by"
-    allowed_source_types: ["*"]
-    allowed_target_types: ["*"]
+  - name: verified-by
+    heading_aliases:
+      - Verified by
+    inverse: verifies
+    allowed_source_types:
+      - requirement
+    allowed_target_types:
+      - plan
+      - spec
+
+  - name: depends-on
+    heading_aliases:
+      - Depends on
+    inverse: depended-on-by
+    allowed_source_types:
+      - anchor
+      - requirement
+      - requirement-index
+      - decision
+      - design
+      - spec
+      - plan
+    allowed_target_types:
+      - anchor
+      - requirement
+      - requirement-index
+      - decision
+      - design
+      - spec
+      - plan
+
+  - name: supersedes
+    heading_aliases:
+      - Supersedes
+    inverse: superseded-by
+    allowed_source_types:
+      - anchor
+      - requirement
+      - decision
+      - design
+      - spec
+      - plan
+    allowed_target_types:
+      - anchor
+      - requirement
+      - decision
+      - design
+      - spec
+      - plan
 
 invariants:
-  - id: "P1"
-    description: "Supersession is one-to-one: no document should supersede more than one predecessor."
-    source_type: "*"
-    relationship: "supersedes"
-    direction: "outgoing"
-    min: 0
-    max: 1
-    severity: "warning"
+  - id: requirement-has-source
+    description: Every requirement node must have at least one outgoing derived-from edge
+    source_type: requirement
+    direction: incoming
+    min: 1
+    max: null
+    severity: error
