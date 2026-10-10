@@ -1,9 +1,9 @@
 ---
 type: Configuration
 title: Configuration
-description: How to register okf-mcp in opencode, Claude Desktop, and other MCP hosts, including permission strings, CLI flags, and auto-registration behaviour.
-tags: [configuration, mcp, opencode, claude, permissions, client-setup, multi-bundle, hidden]
-timestamp: 2026-07-23T00:00:00Z
+description: How to register okf-mcp in MCP hosts, supported CLI flags, and the distinction between runtime configuration and the .okf-profile.yaml template.
+tags: [configuration, mcp, opencode, claude, permissions, client-setup, multi-bundle, hidden, okf-profile]
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Configuration
@@ -11,6 +11,8 @@ timestamp: 2026-07-23T00:00:00Z
 ## No config file
 
 `okf-mcp` has no configuration file of its own. The only runtime input is the process working directory, which becomes the scan root. Run the binary from the repository root you want to index.
+
+The checked-in `.okf-profile.yaml` is a vocabulary declaration/template, not a runtime configuration file: this checkout does not load or enforce profiles. See [OKF Profile Template](/docs/okf-profile.md) for editing examples, field meanings, and limitations.
 
 ## CLI flags
 

@@ -155,6 +155,8 @@ okf-mcp: WARN: docs/auth.md: missing description
 
 ## CLI flags
 
+The checked-in `.okf-profile.yaml` declares a concept/relationship vocabulary but is **not loaded or enforced by this checkout**. There is no profile activation flag. See [OKF Profile Template](docs/okf-profile.md) for editing examples, field meanings, and limitations; editing the YAML does not change indexing or validation behavior.
+
 `okf-mcp` has no config file, no env vars, no remote settings. The full configuration surface is the three flags below. Pass them on the command line.
 
 ```

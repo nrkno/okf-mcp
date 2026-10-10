@@ -3,10 +3,15 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-07-23T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-10-10
+
+**Creation**: `docs/okf-profile.md` — Documented the checked-in `.okf-profile.yaml` template, illustrative field meanings and examples, lack of runtime loading/enforcement, and the sample invariant's direction/description inconsistency.
+**Update**: `docs/configuration.md`, `docs/index.md`, `README.md` — Added discoverable profile guidance and distinguished the template from supported runtime configuration.
 
 ## 2026-07-23
 
