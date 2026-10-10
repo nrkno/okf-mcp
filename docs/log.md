@@ -3,12 +3,14 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-10-10T19:41:00Z
+timestamp: 2026-10-10T21:10:00Z
 ---
 
 # Directory Update Log
 
 ## 2026-10-10
+
+**Update**: [Portable OKF Authoring Skill](/docs/okf-authoring.md), [OKF Profile Format](/docs/okf-profile-format.md), `skills/okf-authoring/`, `cmd/okf-mcp/skill_authoring_test.go`, `cmd/okf-mcp/profile_docs_test.go` — Added practical mixed-corpus vocabulary selection and justified omissions, artifact-focused fair inline evals, portable profile setup, and real-MCP walkthrough regressions. Separated published package version/shape checks from central loader support; formatting-only assessment unchanged. No live paid ablation or native integration result is claimed.
 
 **Update**: [Portable OKF Authoring Skill](/docs/okf-authoring.md), `skills/okf-authoring/evals/cases.json`, `cmd/okf-mcp/skill_authoring_test.go` — Corrected the eight-case corpus to the supplied skill/version/shape and named trap/prompt/positive-negative contract, preserved scenario IDs and incident lineage, and added strict artifact and malformed-contract tests. Inline-response cases require no mutation; these checks do not claim live agent ablation or native integration results.
 

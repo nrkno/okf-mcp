@@ -41,13 +41,25 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 			t.Fatalf("canonical source lacks frontmatter: %s", ref.source)
 		}
 		want := strings.TrimLeft(source[fm.BodyOffset:], "\n")
-		want = strings.ReplaceAll(want, "](/docs/okf-profile.md)", "](../SKILL.md)")
+		want = strings.ReplaceAll(want, "](/docs/okf-profile.md)", "](profile-setup.md)")
 		if got := read(filepath.Join(base, "references", ref.target)); got != want {
 			t.Fatalf("portable reference drift: %s; synchronize canonical body and documented link transformation", ref.target)
 		}
 	}
 	if read(filepath.Join(base, "LICENSE")) != read(filepath.Join(root, "LICENSE")) {
 		t.Fatal("portable license differs from repository license")
+	}
+	// Existence alone previously allowed the setup promise to point to a
+	// practitioner file with no connection procedure. Pin the destination's job.
+	format := read(filepath.Join(base, "references", "profile-format.md"))
+	if !strings.Contains(format, "[Configuring an OKF Profile](profile-setup.md)") {
+		t.Fatal("profile setup reference points to the wrong capability")
+	}
+	setup := read(filepath.Join(base, "references", "profile-setup.md"))
+	for _, instruction := range []string{"--profile .okf-profile.yaml", "working directory", "Reconnect/restart", "graph_relationships", "graph_integrity", "unproven"} {
+		if !strings.Contains(setup, instruction) {
+			t.Fatalf("portable setup lost required instruction: %s", instruction)
+		}
 	}
 	entry := read(filepath.Join(base, "SKILL.md"))
 	fm := parser.DetectFrontmatter(entry)
@@ -59,12 +71,18 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases.Cases) != 8 {
+	if cases.Version != "1.0.0" {
+		t.Fatal("published package version changed; update this package assertion intentionally")
+	}
+	if len(cases.Cases) != 9 {
 		t.Fatal("missing decision-boundary eval cases")
 	}
 	seen := map[string]bool{}
 	for _, c := range cases.Cases {
 		seen[c.ID] = true
+	}
+	if !seen["mixed-corpus-authoring"] {
+		t.Fatal("missing corpus-to-profile methodology case")
 	}
 	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector", "profile-schema-incident", "index-missing-document", "current-log-entry", "nested-bundle-and-native-skill", "content-review-negative-space", "portable-install-and-tool-absence"} {
 		if !seen[id] {
@@ -137,8 +155,9 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	}
 }
 
-// This checks the user-supplied artifact contract, not live skill value or native
-// integration. The central evaluation harness owns those executions.
+// This checks this package's selected published artifact shape, not the central
+// loader's complete accepted language (which also normalizes legacy shapes).
+// It proves neither live skill value nor native integration.
 type okfAuthoringEvalCase struct {
 	ID                   string   `json:"id"`
 	Name                 string   `json:"name"`
@@ -165,7 +184,7 @@ func decodeOKFAuthoringEvalCorpus(data []byte) (okfAuthoringEvalCorpus, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return corpus, fmt.Errorf("expected one corpus JSON value, got %v", err)
 	}
-	if corpus.Skill != "okf-authoring" || corpus.Version != "1.0.0" || corpus.Shape != 1 || len(corpus.Cases) == 0 {
+	if corpus.Skill != "okf-authoring" || strings.TrimSpace(corpus.Version) == "" || corpus.Shape != 1 || len(corpus.Cases) == 0 {
 		return corpus, fmt.Errorf("invalid skill/version/shape/cases envelope")
 	}
 	ids, names := map[string]bool{}, map[string]bool{}
@@ -193,11 +212,17 @@ func decodeOKFAuthoringEvalCorpus(data []byte) (okfAuthoringEvalCorpus, error) {
 	return corpus, nil
 }
 
-func TestOKFAuthoringEvalContract(t *testing.T) {
+func TestOKFAuthoringPublishedEvalShape(t *testing.T) {
 	t.Parallel()
 	const valid = `{"skill":"okf-authoring","version":"1.0.0","shape":1,"cases":[{"id":"example","name":"Example boundary","trap":"Green validation hides missing inventory","prompt":"Assess the incomplete index inline","expectations":["Flag missing document"],"negative_expectations":["Approve from validator success"]}]}`
 	if _, err := decodeOKFAuthoringEvalCorpus([]byte(valid)); err != nil {
 		t.Fatalf("valid contract rejected: %v", err)
+	}
+	// Version is metadata, not an invented SemVer compatibility constraint.
+	for _, version := range []string{"2.0.0", "next"} {
+		if _, err := decodeOKFAuthoringEvalCorpus([]byte(strings.ReplaceAll(valid, "1.0.0", version))); err != nil {
+			t.Fatalf("nonempty version metadata rejected: %v", err)
+		}
 	}
 	checkMutation := func(name string, mutate func(map[string]any, map[string]any)) {
 		t.Helper()
@@ -240,7 +265,7 @@ func TestOKFAuthoringEvalContract(t *testing.T) {
 		checkMutation("legacy case "+field, func(_, c map[string]any) { c[field] = "legacy" })
 	}
 	checkMutation("wrong skill", func(e, _ map[string]any) { e["skill"] = "another-skill" })
-	checkMutation("wrong version", func(e, _ map[string]any) { e["version"] = "2.0.0" })
+	checkMutation("blank version", func(e, _ map[string]any) { e["version"] = " " })
 	checkMutation("wrong shape", func(e, _ map[string]any) { e["shape"] = 2 })
 	checkMutation("fractional shape", func(e, _ map[string]any) { e["shape"] = 1.5 })
 	checkMutation("empty cases", func(e, _ map[string]any) { e["cases"] = []any{} })

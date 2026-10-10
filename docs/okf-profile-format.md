@@ -3,12 +3,12 @@ type: Configuration
 title: OKF Profile Format
 description: Complete reference for the .okf-profile.yaml relationship profile used by okf-mcp to classify Markdown links into typed graph edges and enforce graph integrity invariants.
 tags: [profile, okf, yaml, schema, graph, relationships, invariants]
-timestamp: 2026-10-10T00:00:00Z
+timestamp: 2026-10-10T21:10:00Z
 ---
 
 # OKF Profile Format
 
-For repository setup, OpenCode configuration, and complete documents to exercise a profile, start with [Configuring an OKF Profile](/docs/okf-profile.md).
+For profile setup, start with [Configuring an OKF Profile](/docs/okf-profile.md). Complete linked-document examples are included below.
 
 ## 1. What `.okf-profile.yaml` is
 

@@ -32,6 +32,84 @@ func docFences(t *testing.T, path, language string) []string {
 	}
 }
 
+func TestOKFAuthoringMixedCorpusExample(t *testing.T) {
+	root := findModuleRoot(t)
+	blocks := docFences(t, filepath.Join(root, "skills/okf-authoring/SKILL.md"), "yaml")
+	if len(blocks) != 1 {
+		t.Fatalf("expected complete walkthrough profile: %d", len(blocks))
+	}
+	for _, tc := range []struct {
+		name, heading, targetType string
+		missing, omitReading      bool
+		wantFindings              int
+	}{
+		{"valid", "Derived from", "anchor", false, false, 0},
+		{"alternate heading", "Source goal", "anchor", false, false, 0},
+		{"missing required", "Derived from", "anchor", true, false, 1},
+		{"nearest unmapped heading", "Notes", "anchor", false, false, 1},
+		{"wrong target", "Derived from", "design", false, false, 1},
+		{"optional reading absent", "Derived from", "anchor", false, true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProfile(t, dir, blocks[0])
+			requirement := "---\ntype: requirement\n---\n# Retry\n## " + tc.heading + "\n"
+			if !tc.missing {
+				requirement += "- [Goal](goal.md)\n"
+			}
+			client := "---\ntype: design\n---\n# Client\n## Implements\n- [Retry](retry.md)\n"
+			if !tc.omitReading {
+				client += "## Further reading\n- [Background](background.md)\n"
+			}
+			for path, body := range map[string]string{
+				"goal.md":  "---\ntype: " + tc.targetType + "\n---\n# Goal\n",
+				"retry.md": requirement, "client.md": client,
+				"background.md": "---\ntype: Architecture\n---\n# Background\n",
+			} {
+				if err := os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			srv := newFixtureServer(t, dir, scanner.ScanOptions{})
+			defer srv.Close()
+			var result map[string]any
+			unmarshalText(t, callTool(t, srv, "graph_integrity", map[string]any{"checks": []any{"profile_violations"}}), &result)
+			if !boolVal(result["profile_loaded"]) || len(anySlice(result["findings"])) != tc.wantFindings {
+				t.Fatalf("integrity: %v", result)
+			}
+			if tc.wantFindings != 0 {
+				finding := anySlice(result["findings"])[0].(map[string]any)
+				check, severity := "cardinality_violation", "error"
+				if tc.name == "wrong target" {
+					check, severity = "profile_violations", "warning"
+				}
+				if finding["check"] != check || finding["severity"] != severity || finding["source"] != "retry.md" {
+					t.Fatalf("unexpected near-miss finding: %v", finding)
+				}
+			}
+			unmarshalText(t, callTool(t, srv, "graph_relationships", map[string]any{"file_path": "client.md", "direction": "outgoing"}), &result)
+			edges := anySlice(result["outgoing"])
+			wantEdges := 2
+			if tc.omitReading {
+				wantEdges = 1
+			}
+			if len(edges) != wantEdges {
+				t.Fatalf("edges: %v", edges)
+			}
+			for _, raw := range edges {
+				edge := raw.(map[string]any)
+				want := "implements"
+				if edge["target"] == "background.md" {
+					want = "untyped"
+				}
+				if edge["type"] != want {
+					t.Fatalf("reading/implementation conflated: %v", edge)
+				}
+			}
+		})
+	}
+}
+
 func TestPublishedProfileExamples(t *testing.T) {
 	root := findModuleRoot(t)
 	guide := filepath.Join(root, "docs", "okf-profile.md")

@@ -3,7 +3,7 @@ type: Playbook
 title: Portable OKF Authoring Skill
 description: Install and maintain the reusable okf-authoring skill, its formatting-only assessment, synchronized portable references, and artifact checks.
 tags: [okf, skill, authoring, installation, assessment, references]
-timestamp: 2026-10-10T19:41:00Z
+timestamp: 2026-10-10T21:10:00Z
 ---
 
 # Portable OKF authoring skill
@@ -23,12 +23,14 @@ The portable references are mechanically synchronized snapshots, not independent
 | Maintained source | Packaged reference | Transformation |
 |---|---|---|
 | `docs/okf-standard.md` | `references/okf-standard.md` | Document body without corpus frontmatter/leading blank line |
-| `docs/okf-profile-format.md` | `references/profile-format.md` | Same body extraction; replace setup link target `/docs/okf-profile.md` with `../SKILL.md` |
+| `docs/okf-profile-format.md` | `references/profile-format.md` | Same body extraction; replace setup link target `/docs/okf-profile.md` with `profile-setup.md` |
 | Root `LICENSE` | Skill `LICENSE` | Exact bytes |
 
 Edit the maintained sources first, then update the packaged snapshots with only the listed transformation. The packaged references are skill assets, not duplicate corpus publications. `TestOKFAuthoringPortablePackage` rejects drift and checks a copy installed away from this repository. Do not maintain separate schema tables in the practitioner or assessment. When installed elsewhere, snapshots remain readable without the source checkout; compare target repository rules/server capabilities before applying version-sensitive claims.
 
 ## Verification boundaries
+
+`references/profile-setup.md` is a curated host-neutral procedure grounded in `docs/okf-profile.md`, not a schema snapshot or a promise to include OpenCode-specific configuration. Maintain its executable/working-directory, explicit-profile, restart and verification instructions alongside that source. The field reference includes complete linked-document examples. The practitioner contains an evidence ledger, vocabulary alternatives, justified omissions and a complete mixed-corpus profile; package tests exercise that actual profile through MCP, not only its file existence.
 
 Native `SKILL.md` metadata is intentionally not OKF content frontmatter. Single-file document validation reports E2 for its missing `type`, even though it is valid harness metadata. Whole-corpus CLI validation instead silently skips files without an indexed type, including native skills, reference assets and accidentally malformed content documents. This repository's existing root-wide pre-commit hook remains unchanged; its success does not prove native metadata or inventory conformance.
 
@@ -44,4 +46,4 @@ The corpus envelope is `skill: "okf-authoring"`, `version: "1.0.0"`, `shape: 1`,
 go test -race ./cmd/okf-mcp -run 'TestOKFAuthoring' -count=1
 ```
 
-Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. Strict corpus checks reject missing/incorrect fields and types, empty expectations, duplicate identities and legacy ad-hoc keys; malformed-contract tests exercise these rejection paths. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.
+Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. The local strict checker deliberately enforces this package's selected published shape, not the central Loom loader's complete accepted language: that loader also normalizes legacy inputs. Tests pin this published package to version `1.0.0` separately; nonempty version metadata such as `2.0.0` is not malformed or an unsupported harness schema. No SemVer compatibility rule is inferred. Nine cases now include mixed-corpus discovery and require actual inline artifacts where requested; explanation alone cannot pass those artifact criteria. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.

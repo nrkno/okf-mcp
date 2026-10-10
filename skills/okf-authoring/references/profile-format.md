@@ -1,6 +1,6 @@
 # OKF Profile Format
 
-For repository setup, OpenCode configuration, and complete documents to exercise a profile, start with [Configuring an OKF Profile](../SKILL.md).
+For profile setup, start with [Configuring an OKF Profile](profile-setup.md). Complete linked-document examples are included below.
 
 ## 1. What `.okf-profile.yaml` is
 
