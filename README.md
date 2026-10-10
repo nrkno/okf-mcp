@@ -4,11 +4,13 @@ An MCP server that makes OKF-conformant documentation queryable by agents.
 
 ## Overview
 
-`okf-mcp` runs as a stdio MCP server alongside your existing MCP host. On every tool call it scans the working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves six tools (list_tags, list_docs, get_doc, validate_doc, get_index, get_log) so agents can look up docs without traversing the file tree themselves.
+`okf-mcp` runs as a stdio MCP server alongside your existing MCP host. On every tool call it scans the working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves thirteen tools — six core tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) and seven graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) — so agents can look up docs and navigate relationships between them without traversing the file tree themselves.
 
-The index is rebuilt on each call, so newly added or updated files are always reflected. No config file, no database, no file watcher — just the files in the repo and their frontmatter.
+The index is rebuilt on each call, so newly added or updated documents are reflected. The optional `.okf-profile.yaml` is loaded at startup to classify relationships and check graph constraints. No database or file watcher is required. See [Configuring an OKF Profile](docs/okf-profile.md) for repository setup and OpenCode examples.
 
 **Frontmatter quality is a functional requirement.** A missing or vague `description` means the wrong document gets returned, or none at all. Treat `title`, `description`, and `tags` as part of the feature, not optional metadata.
+
+For reusable agent methodology, install the [portable OKF authoring skill](docs/okf-authoring.md). It includes a formatting-focused assessment and synchronized direct reference material without requiring this source checkout after installation.
 
 ## Installation
 
@@ -26,7 +28,7 @@ go install github.com/nrkno/plattform-okf-mcp/cmd/okf-mcp@latest
 
 ## Pre-commit hook
 
-A git pre-commit hook is included in `.githooks/pre-commit`. It validates all OKF docs on every commit, catching frontmatter and structure errors before they land.
+A git pre-commit hook is included in `.githooks/pre-commit`. It validates indexed OKF documents and reserved files on every commit. Native skill metadata without an OKF type is not indexed; index completeness, skipped document inventory and log currency still require artifact inspection.
 
 Install the hook:
 
@@ -61,13 +63,17 @@ okf-mcp: serving /path/to/repo
 
 That line confirms which directory is being scanned. If you see the wrong path, adjust the working directory in your host config.
 
+If an `.okf-profile.yaml` file exists in the scan root, it is loaded automatically; otherwise `okf-mcp` falls back to the default profile (all edges are `untyped`). Use `--profile` to override the auto-discovered file.
+
 ## Permissions
 
 MCP hosts require an explicit allow-list of tool calls before an agent can invoke them. The permission string format depends on the host.
 
 ### opencode
 
-In opencode, tool permissions follow the pattern `mcp__<server-key>__<tool-name>`, where the server key matches the key you used in the `mcp` block of `opencode.json`. Using the server key `okf-mcp` (as shown in the Usage section above), the six permission strings are:
+The examples below use an earlier host configuration format. For OpenCode V2, including scan-root `cwd` and explicit profile loading, use [Configuring an OKF Profile](docs/okf-profile.md).
+
+In opencode, tool permissions follow the pattern `mcp__<server-key>__<tool-name>`, where the server key matches the key you used in the `mcp` block of `opencode.json`. Using the server key `okf-mcp` (as shown in the Usage section above), the thirteen permission strings are:
 
 ```
 mcp__okf-mcp__list_tags
@@ -76,6 +82,13 @@ mcp__okf-mcp__get_doc
 mcp__okf-mcp__validate_doc
 mcp__okf-mcp__get_index
 mcp__okf-mcp__get_log
+mcp__okf-mcp__graph_concept
+mcp__okf-mcp__graph_relationships
+mcp__okf-mcp__graph_trace
+mcp__okf-mcp__graph_search
+mcp__okf-mcp__graph_integrity
+mcp__okf-mcp__graph_coverage
+mcp__okf-mcp__graph_context
 ```
 
 A complete `opencode.json` snippet that wires the server registration and the permission allow-list together:
@@ -96,7 +109,14 @@ A complete `opencode.json` snippet that wires the server registration and the pe
       "mcp__okf-mcp__get_doc",
       "mcp__okf-mcp__validate_doc",
       "mcp__okf-mcp__get_index",
-      "mcp__okf-mcp__get_log"
+      "mcp__okf-mcp__get_log",
+      "mcp__okf-mcp__graph_concept",
+      "mcp__okf-mcp__graph_relationships",
+      "mcp__okf-mcp__graph_trace",
+      "mcp__okf-mcp__graph_search",
+      "mcp__okf-mcp__graph_integrity",
+      "mcp__okf-mcp__graph_coverage",
+      "mcp__okf-mcp__graph_context"
     ]
   }
 }
@@ -155,9 +175,7 @@ okf-mcp: WARN: docs/auth.md: missing description
 
 ## CLI flags
 
-The checked-in `.okf-profile.yaml` declares a concept/relationship vocabulary but is **not loaded or enforced by this checkout**. There is no profile activation flag. See [OKF Profile Template](docs/okf-profile.md) for editing examples, field meanings, and limitations; editing the YAML does not change indexing or validation behavior.
-
-`okf-mcp` has no config file, no env vars, no remote settings. The full configuration surface is the three flags below. Pass them on the command line.
+Pass the four flags below on the command line. The optional repository `.okf-profile.yaml` configures relationships and graph constraints; see [Configuring an OKF Profile](docs/okf-profile.md) and the [format reference](docs/okf-profile-format.md).
 
 ```
 okf-mcp [flags]
@@ -166,6 +184,7 @@ Flags:
   -validate         Validate document conformance and exit (no MCP server)
   -path string      Path to validate (relative to cwd) (default ".")
   -enable-hidden    Traverse hidden directories (except .git, .hg, .svn)
+  -profile string   Path to an .okf-profile.yaml file (auto-discovered by default)
 ```
 
 ### `--validate`
@@ -409,6 +428,26 @@ In a multi-bundle repository, `get_log` aggregates entries from **all** `log.md`
 ```
 
 When no `log.md` is found in any bundle, the response is `{"entries": [], "note": "no log.md found"}`. A malformed `log.md` is reported via `"note": "log.md has malformed entries"` while the successfully parsed entries are still returned.
+
+## Graph tools
+
+`okf-mcp` exposes seven graph tools for navigating relationships between documents. They rebuild the same OKF index as the core tools and operate over a directed graph projection derived from Markdown links and the active `.okf-profile.yaml`.
+
+- `graph_concept` — returns metadata and incoming/outgoing edge counts for a single concept.
+- `graph_relationships` — returns direct one-hop incoming, outgoing, or bidirectional edges for a concept.
+- `graph_trace` — follows relationships transitively upstream or downstream from a starting concept.
+- `graph_search` — searches indexed concepts by topic/type/tags when you don't know the file path.
+- `graph_integrity` — audits the graph for dangling links, orphans, profile violations, and superseded dependencies.
+- `graph_coverage` — tests whether concepts of one type reach concepts of another through relationship paths.
+- `graph_context` — returns a bounded neighborhood around a concept for lightweight reasoning.
+
+See [`docs/tools.md`](docs/tools.md) for the full parameter and response reference.
+
+## Profile
+
+`.okf-profile.yaml` is an optional profile file at the scan root that defines a relationship vocabulary for the bundle. It controls how Markdown headings classify links into typed edges (for example `depends_on`, `implements`, or `supersedes`), what inverse edges are reported, and what cardinality invariants `graph_integrity` checks. If no profile is present, `okf-mcp` uses a default profile in which every edge is `untyped`.
+
+See [`docs/okf-profile-format.md`](docs/okf-profile-format.md) for the complete schema reference.
 
 ## Multi-bundle support
 

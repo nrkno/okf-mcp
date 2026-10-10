@@ -1,14 +1,14 @@
 ---
 type: API Reference
 title: MCP Tools Reference
-description: Complete reference for the six MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, and get_log — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
-tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, mcp, scoring, match, multi-bundle, bundle]
-timestamp: 2026-07-23T00:00:00Z
+description: Complete reference for the thirteen MCP tools exposed by okf-mcp — list_tags, list_docs, get_doc, validate_doc, get_index, get_log, and the graph tools (graph_concept, graph_relationships, graph_trace, graph_search, graph_integrity, graph_coverage, graph_context) — including parameters, response shapes, scoring, multi-bundle behavior, and error codes.
+tags: [api, tools, list-tags, list-docs, get-doc, validate-doc, get-index, get-log, graph-concept, graph-relationships, graph-trace, graph-search, graph-integrity, graph-coverage, graph-context, mcp, scoring, match, multi-bundle, bundle, graph]
+timestamp: 2026-08-31T00:00:00Z
 ---
 
 # MCP Tools Reference
 
-`okf-mcp` exposes six tools over the MCP stdio protocol. All tools rebuild the index on every call — freshly created or edited files are always reflected without restarting the server.
+`okf-mcp` exposes navigation and analysis tools over the MCP stdio protocol. All tools rebuild the index on every call — freshly created or edited files are always reflected without restarting the server.
 
 ## `list_tags`
 
@@ -316,3 +316,278 @@ When no `log.md` is found or one is malformed, `get_log` never silently returns 
 3. get_log(action="Creation")                    → only creation entries
 4. get_log(limit=5)                              → most recent 5 entries
 ```
+
+---
+
+## `graph_concept`
+
+Returns metadata and edge counts for a single concept (indexed document) identified by its relative `file_path`.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the concept document |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path from the scan root |
+| `type` | string | Document type from frontmatter |
+| `title` | string | Document title from frontmatter |
+| `description` | string | Document description from frontmatter |
+| `tags` | string[] | Document tags from frontmatter |
+| `bundle` | string | OKF bundle the file belongs to (I-17) |
+| `outgoing_count` | int | Number of outgoing relationships |
+| `incoming_count` | int | Number of incoming relationships |
+| `outgoing_types` | string[] | Sorted unique outgoing relationship types |
+| `incoming_types` | string[] | Sorted unique incoming relationship types |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Concept not found | `concept not found: "<path>"` |
+
+---
+
+## `graph_relationships`
+
+Return direct one-hop incoming/outgoing edges for a known concept. Use `graph_trace` for transitive traversal.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the concept document |
+| `direction` | string | no | `"both"` | `"outgoing"`, `"incoming"`, or `"both"` |
+| `type` | string | no | — | Filter by relationship type |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `outgoing` | array | Outgoing edges (see below) |
+| `incoming` | array | Incoming edges (see below) |
+
+Each outgoing edge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `target` | string | Relative path of the target concept |
+| `type` | string | Relationship type |
+| `heading` | string | Section heading where the link appeared |
+| `line` | int | 1-based line number in the source document body |
+
+Each incoming edge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | string | Relative path of the source concept |
+| `type` | string | Relationship type (inverse of the original edge) |
+| `heading` | string | Section heading where the link appeared |
+| `line` | int | 1-based line number in the source document body |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Invalid `direction` | `invalid direction "<value>": must be "outgoing", "incoming", or "both"` |
+
+---
+
+## `graph_trace`
+
+Follow relationships transitively upstream/downstream from a known concept.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Relative path of the starting concept |
+| `direction` | string | **yes** | — | `"upstream"` (incoming) or `"downstream"` (outgoing) |
+| `type` | string | no | — | Filter by relationship type |
+| `max_depth` | number | no | `5` | Maximum traversal depth, clamped to 1–20 |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `start` | string | Starting concept file path |
+| `direction` | string | `"upstream"` or `"downstream"` |
+| `steps` | array | Reachable concepts in BFS order |
+| `total_reachable` | int | Total number of reachable concepts |
+
+Each step:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `node` | string | Relative path of the reachable concept |
+| `depth` | int | Hop count from the start concept |
+| `via_type` | string | Relationship type used to reach this node |
+| `path` | string[] | Edge chain as `"source → target"` strings |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Invalid `direction` | `invalid direction "<value>": must be "upstream" or "downstream"` |
+
+---
+
+## `graph_search`
+
+Find graph concepts by topic/type/tags. Use this when you don't yet know the file path.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `query` | string | no | `""` | Search query |
+| `type` | string | no | — | Exact-match concept type filter |
+| `tags` | string[] | no | — | Tag filter (OR semantics) |
+| `limit` | number | no | `20` | Maximum results, clamped to 1–100 |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `concepts` | array | Matching concepts, sorted by score desc then `file_path` asc |
+| `total` | int | Total number of matching concepts before `limit` |
+
+Each concept:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path from the scan root |
+| `type` | string | Document type from frontmatter |
+| `title` | string | Document title from frontmatter |
+| `description` | string | Document description from frontmatter |
+| `tags` | string[] | Document tags from frontmatter |
+| `bundle` | string | OKF bundle the file belongs to (I-17) |
+| `score` | number | Text relevance score from `matcher.Score` |
+
+### Scoring
+
+Same weighted-token model as `get_doc`: title 3×, tags 2×, description 1×. Tag-filter failures (score `-1`) are excluded. An empty `query` returns all concepts that pass the type/tag filters with score `0`.
+
+---
+
+## `graph_integrity`
+
+Audit graph structure for dangling links, orphans, profile violations and superseded dependencies.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `checks` | string[] | no | all | Subset of: `"dangling"`, `"orphans"`, `"profile_violations"`, `"superseded_deps"` |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `summary.dangling_refs` | int | Number of dangling-reference findings |
+| `summary.orphan_concepts` | int | Number of orphan-concept findings |
+| `summary.profile_violations` | int | Number of profile type/cardinality findings |
+| `summary.superseded_deps` | int | Number of superseded-dependency findings |
+| `summary.total_findings` | int | Sum of all findings |
+| `findings` | array | Individual findings (see below) |
+| `profile_loaded` | bool | `true` when a non-default profile is loaded |
+
+Each finding object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `check` | string | Check name |
+| `severity` | string | `"error"`, `"warning"`, or `"notification"` |
+| `source` | string | Source file path (or concept path) |
+| `target` | string | Target file path, when applicable |
+| `heading` | string | Heading context, when applicable |
+| `message` | string | Human-readable description |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| Unknown check in `checks` | `unknown check "<value>"` |
+
+---
+
+## `graph_coverage`
+
+Test whether concepts of one type have a relationship path to another type. The BFS traverses the relationship in both directions so that edges authored from the target side (e.g., `Implementation` → `Requirement`) are discovered when querying from the source side (`Requirement` → `Implementation`).
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `source_type` | string | **yes** | — | Concept type to start from (e.g. `"Requirement"`) |
+| `target_type` | string | **yes** | — | Concept type to reach (e.g. `"Implementation"`) |
+| `relationship` | string | no | `""` (all types) | Follow only edges of this type |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source_type` | string | Source concept type |
+| `target_type` | string | Target concept type |
+| `total_sources` | int | Total number of source-type concepts |
+| `covered` | int | Number of source concepts that reach at least one target |
+| `uncovered` | int | Number of source concepts that reach no targets |
+| `coverage_ratio` | number | `covered / total_sources` (0.0–1.0) |
+| `uncovered_items` | array | Source concepts with no path to a target |
+
+Each uncovered item:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | string | Relative path of the uncovered concept |
+| `title` | string | Concept title |
+| `nearest_targets` | string[] | Always `[]` for uncovered items |
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `source_type` missing | `source_type is required` |
+| `target_type` missing | `target_type is required` |
+
+---
+
+## `graph_context`
+
+Return a bounded neighborhood intended for reasoning context when loading the entire graph would be excessive. The result includes the center concept, its immediate neighbors, and optionally one more layer, bounded by `max_results`.
+
+### Parameters
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `file_path` | string | **yes** | — | Center concept |
+| `depth` | number | no | `1` | Neighborhood depth (`1` or `2`) |
+| `max_results` | number | no | `100` | Maximum total neighbor entries across all directions and depths (`1`–`1000`) |
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `center` | object | `{file_path, type, title}` of the center concept |
+| `neighbors.upstream` | array | Incoming neighbors as `{file_path, type, via}` objects |
+| `neighbors.downstream` | array | Outgoing neighbors as `{file_path, type, via}` objects |
+| `depth` | int | Requested depth |
+| `total_neighbors` | int | Number of neighbors returned |
+| `max_results` | int | Requested budget |
+| `truncated` | bool | `true` when the budget was exhausted |
+
+Neighbors are collected deterministically: upstream first, then downstream, alphabetical by `file_path` within each direction. The center concept does not count against the `max_results` budget. At `depth=2`, depth-1 neighbors are collected first, then remaining budget is allocated to depth-2 neighbors.
+
+### Error responses
+
+| Situation | Error message |
+|-----------|---------------|
+| `file_path` missing | `file_path is required` |
+| Concept not found | `concept not found: "<path>"` |

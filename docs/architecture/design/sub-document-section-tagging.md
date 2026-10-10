@@ -283,6 +283,14 @@ validation. Not applicable since Option 2 is not recommended.
 | Option 4 deferred      | Agent cannot retrieve sub-section of a large indivisible file            | Yes — no such file in corpus yet                                           |
 | Section scoring signal | Section-level precision not achievable without full metadata per section | Accepted — focused files deliver equal precision at zero server complexity |
 
+## Dependencies
+
+- [Architecture](/docs/architecture.md) — the scoring model and matcher this evaluation reasons about
+
+## Related
+
+- [`get_doc` Response Shape](get-doc-response-shape.md) — the companion evaluation on response shape; same observed-pain trigger pattern for deferred options
+
 ## Log
 
 - 2026-07-17: Added OKF frontmatter and Log section (initial architecture decision record).

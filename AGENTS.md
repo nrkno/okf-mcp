@@ -2,11 +2,11 @@
 
 ## 1. Overview
 
-**plattform-okf-mcp** is a standalone Go MCP server that scans an OKF-conformant repository for markdown files, builds an in-memory index from YAML frontmatter, and exposes six tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) so agents can query documentation without traversing files directly. It also provides a `--validate` CLI flag and a pre-commit hook for validating doc conformance.
+**plattform-okf-mcp** is a standalone Go MCP server that scans an OKF-conformant repository for markdown files, builds an in-memory index from YAML frontmatter, and exposes thirteen tools — six core tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) and seven graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) — so agents can query documentation and navigate relationships between documents without traversing files directly. It also provides `--validate` and `--profile` CLI flags and a pre-commit hook for validating doc conformance.
 
-Single binary — no config file, no database, no HTTP, no CGO. The process's current working directory is the scan root: wherever you launch the binary, that directory tree is what gets indexed.
+Single binary — optional repository relationship profile, no database, no HTTP, no CGO. The process's current working directory is the scan root: wherever you launch the binary, that directory tree is what gets indexed. Profile setup and schema are documented in `docs/okf-profile.md` and `docs/okf-profile-format.md`.
 
-Entry point: `cmd/okf-mcp/main.go` — wires the six MCP tool handlers as package-level functions and starts a stdio MCP server via `server.ServeStdio`.
+Entry point: `cmd/okf-mcp/main.go` — wires the thirteen MCP tool handlers as package-level functions and starts a stdio MCP server via `server.ServeStdio`.
 
 ---
 
@@ -16,12 +16,15 @@ Entry point: `cmd/okf-mcp/main.go` — wires the six MCP tool handlers as packag
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `internal/scanner` | `ScanAll(dir, opts)` — walks `*.md` recursively, applies skip rules (hidden dirs per `ScanOptions.EnableHidden`, non-`.md` files); returns indexable and reserved file paths   |
 | `internal/parser`  | `Parse(path)` — extracts YAML frontmatter into `Doc` struct; `DetectFrontmatter` is the single source of truth (I-15)                    |
-| `internal/index`   | `Index.Rebuild()` — calls scanner+parser, stores relative paths, computes the `Bundle` field per doc/reserved file (I-17), mutex-guarded; `Docs()` + `Tags()` + `Reserved()` + `Tree()` for reads  |
+| `internal/index`   | `Index.Rebuild()` — calls scanner+parser, stores relative paths, computes the `Bundle` field per doc/reserved file (I-17), builds the graph projection, mutex-guarded; `Docs()` + `Tags()` + `Reserved()` + `Tree()` + `Graph()` for reads  |
 | `internal/matcher` | `Score()` + `FindBest()` — weighted token scoring (title 3×, tags 2×, description 1×); AND/OR tag filter                                  |
 | `internal/validator` | `ValidateDoc()`, `ValidateReserved()`, `ValidateBundle()` — frontmatter conformance checks (E0–E3, W1–W4, N1)                           |
 | `internal/logparser` | `Parse(body)` — parses log.md body into structured `LogEntry` slices (date, action, target, detail)                                     |
+| `internal/graph`   | `Build()` — builds the directed graph projection from parsed docs and a profile; concept/relationship/trace/search/integrity/coverage/context queries |
+| `internal/linkextract` | `Extract(body, docDir, corpusRoot)` — parses Markdown AST with goldmark, extracts links, resolves targets, enforces corpus-root containment (I-30) |
+| `internal/profile` | `Load(path)`/`Default()` — loads OKF relationship-profile YAML; validates heading-alias uniqueness (I-31) and provides relationship classification |
 
-Tool handlers (`listTagsHandler`, `listDocsHandler`, `getDocHandler`, `validateDocHandler`, `getIndexHandler`, `getLogHandler`) live in `cmd/okf-mcp/main.go`. Tool definitions (`listTagsTool`, `listDocsTool`, `getDocTool`, `validateDocTool`, `getIndexTool`, `getLogTool`) are package-level variables — tests in `cmd/okf-mcp/` share them directly for schema parity.
+Tool handlers (`listTagsHandler`, `listDocsHandler`, `getDocHandler`, `validateDocHandler`, `getIndexHandler`, `getLogHandler`, `graphConceptHandler`, `graphRelationshipsHandler`, `graphTraceHandler`, `graphSearchHandler`, `graphIntegrityHandler`, `graphCoverageHandler`, `graphContextHandler`) live in `cmd/okf-mcp/main.go`. Tool definitions (`listTagsTool`, `listDocsTool`, `getDocTool`, `validateDocTool`, `getIndexTool`, `getLogTool`, `graphConceptTool`, `graphRelationshipsTool`, `graphTraceTool`, `graphSearchTool`, `graphIntegrityTool`, `graphCoverageTool`, `graphContextTool`) are package-level variables — tests in `cmd/okf-mcp/` share them directly for schema parity.
 
 ---
 
@@ -48,6 +51,18 @@ Every change must preserve these. When a change would break one, stop and escala
 - **I-17**: Every document response (`list_docs`, `get_doc`, `get_index` leaf) includes a `bundle` field: the relative path to the nearest ancestor directory containing `index.md`, or the file's immediate parent directory if no ancestor has one
 - **I-18**: `--enable-hidden` defaults to off. When off, scanner behavior is byte-identical to pre-flag behavior (all dot-dirs skipped)
 - **I-19**: VCS directories (`.git`, `.hg`, `.svn`) are always skipped regardless of `--enable-hidden`
+- **I-20**: Every node and edge in the graph is derived from an OKF source document. No graph mutation API exists.
+- **I-21**: Two consecutive `Rebuild`s on an identical corpus produce identical graph output (same nodes, same edges, same ordering).
+- **I-22**: Every node in the graph corresponds to an indexed document (one that passed the parser gate: has frontmatter with non-empty `type`).
+- **I-23**: Every edge endpoint references a valid indexed document or is recorded as a dangling reference with source file, raw target, and heading context.
+- **I-24**: For every edge A→B with type T, querying B's incoming relationships returns A with type `inverse(T)`. Inverse edges are derived, not stored as separate facts.
+- **I-25**: Links under unrecognized headings (no profile heading match) are recorded as `untyped` relationships, not discarded.
+- **I-26**: With no profile loaded, all relationships are `untyped`. Graph tools still function: navigation, search, trace, context all work with untyped edges. Integrity queries that depend on profile rules return empty results with a note that no profile is loaded.
+- **I-27**: All file paths in graph tool responses are relative to the scan root, consistent with I-1.
+- **I-28**: Graph tools handle zero-document and zero-edge corpora without panic. Empty graph returns empty results, not errors.
+- **I-29**: Every unresolvable link is recorded with: source file path, raw link target string, and the heading context under which it was found.
+- **I-30**: Every resolved Markdown path in the graph MUST remain inside the configured OKF scan root. Path traversal inputs such as `../../../../etc/passwd` MUST NOT escape the corpus root during link resolution, graph inspection, or any query operation. A link whose resolved path falls outside the scan root is silently dropped — not returned by the extractor, not recorded as a graph node, edge, or dangling reference.
+- **I-31**: No two relationship definitions in a loaded profile MAY share the same normalized heading alias. If two relationships claim the same alias, `profile.Load()` rejects the profile with a descriptive error naming the conflicting alias and the two relationship definitions involved.
 
 ---
 
@@ -72,6 +87,9 @@ github.com/nrkno/plattform-okf-mcp/internal/index
 github.com/nrkno/plattform-okf-mcp/internal/matcher
 github.com/nrkno/plattform-okf-mcp/internal/validator
 github.com/nrkno/plattform-okf-mcp/internal/logparser
+github.com/nrkno/plattform-okf-mcp/internal/graph
+github.com/nrkno/plattform-okf-mcp/internal/linkextract
+github.com/nrkno/plattform-okf-mcp/internal/profile
 ```
 
 Do **not** reach for gopls to read file content, check test output, or run builds — use `Read` and `Bash` for those.
@@ -147,9 +165,9 @@ These docs are served by the `okf-mcp` server itself when running in this repo �
 
 | Document                | Content                                                               |
 | ----------------------- | --------------------------------------------------------------------- |
-| `docs/architecture.md`  | Package responsibilities, invariants I-1→I-19, scoring model          |
-| `docs/tools.md`         | `list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log` — params, response shapes, errors |
-| `docs/configuration.md` | MCP client setup, permission strings for all six tools, opencode/Claude examples |
+| `docs/architecture.md`  | Package responsibilities, invariants I-1→I-31, scoring model, graph projection data model          |
+| `docs/tools.md`         | `list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`, `graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context` — params, response shapes, errors |
+| `docs/configuration.md` | MCP client setup, permission strings for all thirteen tools, `--profile` flag, opencode/Claude examples |
 | `docs/okf-standard.md`  | OKF frontmatter schema, type vocabulary, conventions                  |
 | `docs/deployment.md`    | Build, install, release binaries, `--validate` CLI, pre-commit hook   |
 | `docs/log.md`           | Chronological record of changes to docs/ files                        |

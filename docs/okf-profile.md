@@ -1,71 +1,89 @@
 ---
 type: Configuration
-title: OKF Profile Template
-description: How to edit the checked-in .okf-profile.yaml declaration, with concept and relationship examples, field meanings, and the current implementation's lack of profile loading or enforcement.
-tags: [okf-profile, configuration, yaml, concepts, relationships, invariants]
+title: Configuring an OKF Profile
+description: Create .okf-profile.yaml in your repository, configure okf-mcp in OpenCode, and verify typed Markdown relationships and graph constraints with complete examples.
+tags: [okf-profile, profile, configuration, yaml, relationships, invariants, opencode]
 timestamp: 2026-10-10T00:00:00Z
 ---
 
-# OKF profile template
+# Configuring an OKF profile
 
-## Support boundary
+`.okf-profile.yaml` configures your repository's relationship vocabulary and graph checks. It maps Markdown headings to relationship names, restricts document types on each side of a link, and defines relationship-count constraints. Put it in the repository being indexed, not in an agent prompt or OpenCode's configuration directory. For all fields and defaults, see [OKF Profile Format](/docs/okf-profile-format.md).
 
-The repository contains [`.okf-profile.yaml`](../.okf-profile.yaml), an AOS vocabulary declaration. **The implementation in this checkout does not read or enforce it.** There is no profile CLI flag, environment variable, automatic discovery, or validated profile schema. The filename is `.okf-profile.yaml`, not an extensionless `.okf-profile`.
+## 1. Configure the harness
 
-Editing this file records a vocabulary for people or a separately configured consumer; it does not configure this checkout's `okf-mcp` runtime. The comment in the sample claiming conformance to a generic profile schema is not a schema guarantee provided by this implementation. If another tool consumes the file, consult that tool's documentation before relying on field semantics, defaults, or validation.
+Use a profile-capable `okf-mcp` binary exposing `--profile` and graph tools. Check the executable your harness actually launches with `--help`; an older six-tool binary is not sufficient. Building the restored source in this repository produces a profile-capable server.
 
-This checkout serves six documentation tools, not graph tools. It scans Markdown, ignores the profile's YAML file, and validates document frontmatter independently of the profile. `--enable-hidden` enables traversal of hidden directories; it does not enable profiles. `--path` selects a validation directory, not a profile file. See [Configuration](/docs/configuration.md) for supported runtime settings.
+For OpenCode V2, merge this entry into your repository's `opencode.json`, preserving other settings. Replace the executable path:
 
-## Editing the declaration
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "okf-mcp": {
+        "type": "local",
+        "command": ["/absolute/path/to/okf-mcp", "--profile", ".okf-profile.yaml"],
+        "cwd": "."
+      }
+    }
+  }
+}
+```
 
-Keep the declaration in the repository root as `.okf-profile.yaml`, matching the checked-in sample's location. This is an authoring convention here, **not a runtime discovery rule**. Start from the sample and edit its `name`, `version`, concept names, relationship declarations, and invariants to describe your intended vocabulary. Keep `version` quoted as a string and use YAML lists as shown below.
+OpenCode resolves `cwd` from the workspace; this becomes the server's scan root. For a subdirectory workspace, use the intended repository's absolute path as `cwd`. The profile path is relative to that process directory. Other harnesses need the same executable, arguments, and directory in their own configuration format. See OpenCode's [V2 MCP reference](https://opencode.ai/v2/docs/mcp-servers); older host examples elsewhere in this repository use an earlier format.
 
-The sample declares these concept names: `anchor`, `requirement`, `requirement-index`, `decision`, `design`, `spec`, and `plan`. Its relationship names are `derived-from`, `satisfies`, `implements`, `verified-by`, `depends-on`, and `supersedes`.
+Explicit `--profile` is useful during setup: an unreadable/invalid profile fails startup with exit code **2**, instead of falling back. To use automatic discovery, remove `"--profile", ".okf-profile.yaml"` from `command`. The server discovers `.okf-profile.yaml` at the scan root. An invalid discovered profile warns on stderr and falls back to the default; missing profiles also use the default, where links are `untyped` and no profile constraints run.
 
-### Field guide
+Check stderr for `loaded profile`, `loaded discovered profile`, or `using default profile`. One startup-selected profile applies to the entire corpus, including nested bundles. Restart/reconnect after editing it; document graph rebuilds do not reload the profile. Add `--enable-hidden` for documents under directories such as `.opencode/`; it controls traversal, not profile activation. VCS internals remain skipped.
 
-These are illustrative meanings conveyed by the declaration, not an implemented API contract. Required fields, accepted values, case normalization, uniqueness rules, and omitted-field defaults are not checked by this checkout.
+## 2. Create `.okf-profile.yaml`
 
-| Field | Meaning expressed by the sample |
-|---|---|
-| `name` | Profile identifier (`aos` in the checked-in sample). |
-| `version` | Version label for the declaration (`"1.0"`). It is not the binary version. |
-| `concept_types` | List of mappings with a `name` identifying each concept type. |
-| `relationships` | List of named relationship declarations. |
-| `heading_aliases` | Human-readable headings associated with a relationship, such as `Derived from`. |
-| `inverse` | Name for the relationship viewed in reverse, such as `derives`. |
-| `allowed_source_types` | Concept names intended to be permitted at the relationship's source. |
-| `allowed_target_types` | Concept names intended to be permitted at its target. |
-| `invariants` | List of declared graph checks; none run in this checkout. |
-| `id`, `description` | Identifier and human explanation of an invariant. |
-| `source_type` | Concept type named by an invariant. |
-| `direction` | Direction label in the declaration; no direction semantics are implemented here. |
-| `min`, `max` | Intended count bounds; the sample uses `1` and `null`. The meaning of `null` must be confirmed with any actual consumer. |
-| `severity` | Finding label (`error` in the sample); it does not affect this checkout's validation exit code. |
-
-### Small vocabulary example
-
-This YAML is an editable declaration example, not an activation recipe:
+Save this complete profile at your repository's scan root:
 
 ```yaml
-name: example
+name: my-repository
 version: "1.0"
 concept_types:
   - name: anchor
   - name: requirement
 relationships:
   - name: derived-from
-    heading_aliases:
-      - Derived from
+    heading_aliases: [Derived from]
     inverse: derives
-    allowed_source_types:
-      - requirement
-    allowed_target_types:
-      - anchor
-invariants: []
+    allowed_source_types: [requirement]
+    allowed_target_types: [anchor]
+invariants:
+  - id: requirement-has-source
+    description: Every requirement must link to at least one anchor.
+    source_type: requirement
+    relationship: derived-from
+    direction: outgoing
+    min: 1
+    max: -1
+    severity: error
 ```
 
-A Markdown document can express the corresponding intended relationship:
+Use exact, case-sensitive frontmatter types in allow-lists and selectors. Heading aliases are lowercased, trimmed, and whitespace-normalized; `Derived from` and ` DERIVED   FROM ` match alike. Relationship names are your vocabulary: hyphens and underscores are not interchangeable in queries. Concept aliases do not rewrite frontmatter or expand allow-lists.
+
+For a minimum of one with no maximum, use `min: 1`, `max: -1` — not `max: null` or an omitted maximum, which default to zero. Include the invariant's `relationship`; descriptions do not override fields. Use `source_type: "*"` explicitly for all types; omission does not mean all. An incoming invariant uses the original forward relationship name, not the inverse shown in incoming query results. See the format reference for validation errors and additional constraints.
+
+## 3. Create linked documents
+
+Create `docs/anchor.md`:
+
+```markdown
+---
+type: anchor
+title: Example Anchor
+description: The goal that motivates the example requirement.
+tags: [example, goal]
+---
+
+# Example Anchor
+```
+
+Create `docs/requirement.md` alongside it:
 
 ```markdown
 ---
@@ -82,18 +100,25 @@ tags: [example, requirement]
 - [Example anchor](anchor.md)
 ```
 
-Place the linked `anchor.md` alongside the requirement when adapting this example. In this checkout, a non-empty `type` makes the document indexable; neither declaring `requirement` in the profile nor using the heading creates a graph edge. Single-file `validate_doc` uses the standard OKF vocabulary unless `known_types` is supplied, so it warns about `requirement` by default. Bundle validation derives its vocabulary from indexed documents instead. Changing `concept_types` does not configure either validation path.
+The requirement has an outgoing `derived-from` edge to the anchor; the anchor's incoming view shows `derives`. Both files must be indexed: valid YAML frontmatter with non-empty `type`, and visible to the scanner. A concept declaration alone creates no document.
 
-## Invariant caveat in the checked-in sample
+Classification uses the nearest preceding heading, not a matching ancestor. A `### Notes` before the link changes it to `untyped` unless that heading is mapped. Unrecognized headings and links before any heading are `untyped`; type allow-list checks skip them. A minimum-count invariant catches missing or misclassified required links.
 
-The `requirement-has-source` invariant says every requirement must have an **outgoing `derived-from`** edge, but its fields specify `direction: incoming` and do not name `derived-from`. These are inconsistent or underspecified declarations, not an enforced rule. Do not assume the description overrides the fields, that `incoming` means outgoing, or that a consumer infers the relationship from the ID. Resolve the direction and relationship-selection contract with the consuming implementation before using this invariant. This documentation leaves the sample unchanged.
+Use plain file links. `anchor.md` resolves relative to the source document; `/docs/anchor.md` resolves from the scan root. Escaping paths are dropped. HTTP(S), mailto, and fragment-only links are skipped, as are links inside code blocks/spans. Targets must resolve to indexed documents or are reported as dangling. File fragments such as `anchor.md#section` are not stripped in this extractor, so avoid them for graph links. Counts are extracted links, not unique targets.
 
-## Checking your work
+## 4. Verify through the harness
 
-For this repository's documentation bundle, run from the repository root:
+Connect the server (`opencode mcp list`, or `/mcps`) and inspect its profile-selection log. Ask your agent to call these tools; harnesses may prefix/group tool names differently:
 
-```sh
-go run ./cmd/okf-mcp --validate --path docs
-```
+| Tool | Arguments | Expected for this example |
+|---|---|---|
+| `get_index` | `{}` | Both documents are present. |
+| `graph_relationships` | `{"file_path":"docs/requirement.md","direction":"outgoing","type":"derived-from"}` | One edge to `docs/anchor.md`. |
+| `graph_relationships` | `{"file_path":"docs/anchor.md","direction":"incoming","type":"derives"}` | One edge from `docs/requirement.md`. |
+| `graph_integrity` | `{"checks":["profile_violations"]}` | `profile_loaded: true`, no type/cardinality findings for the example. Other repository documents may produce findings. |
 
-This checks Markdown conformance only. A successful result does **not** establish that `.okf-profile.yaml` is valid, loaded, or enforced. YAML syntax checking with another tool likewise does not prove semantic compatibility with a profile consumer.
+Removing the link should produce an `error` cardinality finding for the requirement. Changing the anchor's type should produce a target-type warning. Type violations do not remove edges; cardinality findings use the invariant's severity. The `profile_violations` filter includes both kinds of checks.
+
+`profile_loaded: false` can mean no profile, invalid-discovery fallback, or a loaded profile with neither relationships nor invariants. Check stderr and the actual executable/root before treating zero findings as success.
+
+**Document conformance and graph validation are separate.** `validate_doc` checks frontmatter/reserved-file conformance; `graph_integrity` checks relationships and cardinality. Single-file `validate_doc` accepts `known_types` for custom types such as `anchor` and `requirement`; `concept_types` does not configure that vocabulary. CLI `--validate` also checks document conformance, not graph enforcement: its validation index uses the default profile even when startup loads `--profile`. Graph findings do not automatically block commits or fail that CLI command. Have your agent/CI consume both checks and apply your chosen policy.
