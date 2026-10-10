@@ -21,6 +21,8 @@ Assess formatting, structure, field conformance and applicable repository-profil
 
 ## Interpret verification narrowly
 
+For a formatting-only direction check, trace one already-accepted relationship from the document containing the link to its actual target. Compare their exact frontmatter `type` values with `allowed_source_types` and `allowed_target_types` respectively; flag accidentally swapped lists even if loading succeeds. For `requirement.md → derived-from → anchor.md`, `[anchor]` as source and `[requirement]` as target are reversed. An incoming `derives` query does not excuse that reversal. Check invariant `source_type` separately as the checked-node selector: an incoming rule about anchors selects `anchor` and names forward `derived-from`, not inverse `derives`. Assess representation against accepted meaning, never whether the derivation itself is substantively justified.
+
 `validate_doc`/CLI checks frontmatter and reserved-file conformance. Existing index validation checks absence of frontmatter, **not completeness**. Log validation checks required Log metadata and gives notifications for link/order issues, **not current-date coverage**. Timestamp/tag-style/bundle-inventory obligations require artifact inspection. Unknown-type findings depend on supplied/derived vocabulary.
 
 `graph_integrity` reports profile type/cardinality constraints separately. Profile-load acceptance is not proof that all names/selectors express the intended rule; graph findings are not automatic commit blockers or CLI conformance failures. Require observed tool output or explicitly mark unavailable proof. Do not accept a successful document validator as a substitute for these distinct claims.

@@ -10,6 +10,8 @@ timestamp: 2026-10-10T00:00:00Z
 
 ## 2026-10-10
 
+**Update**: [OKF Profile Format](/docs/okf-profile-format.md), `skills/okf-authoring/` — Added directional source/target teaching, exact type allow-lists, incoming checked-node selectors and inverse-query distinctions; retained synchronized portable references and formatting-only assessment. Added positive/negative eval specifications and real-MCP example regressions, not an agent-ablation result.
+
 **Creation**: `skills/okf-authoring/`, [Portable OKF Authoring Skill](/docs/okf-authoring.md) — Added practitioner methodology, formatting-only assessment, synchronized direct reference snapshots, license and positive/negative eval specifications. No agent-ablation baseline is claimed.
 **Creation**: `cmd/okf-mcp/skill_authoring_test.go` — Verified portable reference synchronization and relocated links, native metadata separation, and positive/negative artifact cases exposing index-completeness, log-currency and skipped-file limits of implemented validation.
 **Update**: [OKF Standard](/docs/okf-standard.md), `docs/index.md`, `README.md`, [Deployment](/docs/deployment.md) — Clarified actual validator checks versus authoring obligations, native metadata and indexed-corpus boundaries; the existing pre-commit hook is unchanged.

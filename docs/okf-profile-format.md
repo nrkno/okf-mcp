@@ -63,6 +63,59 @@ No two relationships may share the same normalized heading alias. If two relatio
 
 If `inverse` is omitted or empty, the runtime inverse for that relationship is `"referenced_by"`.
 
+### Source and target: follow the written link
+
+The **source** is the document containing the Markdown link; the **target** is the linked document. Read the forward edge as `source → relationship → target`, not in the order that you happen to query the graph.
+
+For example, given accepted content that a requirement is derived from an anchor, `requirement.md` contains:
+
+```markdown
+---
+type: requirement
+---
+# Example requirement
+
+## Derived from
+
+- [Example anchor](anchor.md)
+```
+
+The linked `anchor.md` contains:
+
+```markdown
+---
+type: anchor
+---
+# Example anchor
+```
+
+The forward edge is `requirement.md → derived-from → anchor.md`: source type `requirement`, target type `anchor`. This complete teaching profile represents that direction:
+
+```yaml
+version: "1.0"
+relationships:
+  - name: derived-from
+    heading_aliases: [Derived from]
+    inverse: derives
+    allowed_source_types: [requirement]
+    allowed_target_types: [anchor]
+invariants:
+  - id: anchor-has-requirement
+    description: Each anchor has at least one incoming derivation in this example.
+    source_type: anchor
+    relationship: derived-from
+    direction: incoming
+    min: 1
+    max: -1
+    severity: error
+```
+
+`allowed_source_types: [requirement]` accepts only the exact frontmatter value `type: requirement` at the link-containing endpoint; `allowed_target_types: [anchor]` accepts only `type: anchor` at the linked endpoint. `Requirement` or a declared concept alias is not a substitute. Reversing these lists would generate both source- and target-type warnings for this edge, even though the YAML loads. The links remain in the graph.
+
+Querying incoming relationships on `anchor.md` displays the inverse `derives`, pointing back to `requirement.md`. That query does **not** swap the forward relationship's allow-list constraints: they still check requirement as source and anchor as target. An inverse view is not a second authored forward relationship.
+
+The invariant's `source_type` is a separate **checked-node selector**, not `allowed_source_types`. Here `source_type: anchor` selects anchors and counts their incoming `derived-from` links using the forward name. Selecting `requirement` instead would check requirements for incoming links, not check anchors or reverse the edge. This incoming obligation is illustrative; do not impose it unless accepted content requires it.
+
 ## 5. `invariants[]`
 
 | Field | Type | Required | Description |

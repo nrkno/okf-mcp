@@ -22,6 +22,8 @@ Read the direct [format reference](references/okf-standard.md) for document conv
 
 For each candidate relationship, record the source document, its actual link/statement, nearest heading, target document, and the meaning already established by the accepted content. Discover existing edges with `graph_search`, `graph_concept`, and `graph_relationships`; use bounded `graph_context` or `graph_trace` when surrounding dependencies matter. Inspect unknown relationship names rather than guessing vocabulary.
 
+The **source contains the link**; the **target is the linked document**. If `requirement.md` links to `anchor.md` under `Derived from`, read `requirement → derived-from → anchor`: `allowed_source_types: [requirement]`, `allowed_target_types: [anchor]`, using those exact frontmatter `type` values. An incoming inverse query on the anchor does not swap these forward constraints. Separately, invariant `source_type` selects the node being checked even for `direction: incoming`; to count incoming derivations at anchors, select `anchor` and name the forward `derived-from` relationship. The direct profile reference provides the complete worked example.
+
 Choose a small vocabulary that expresses genuine relationships, consolidating repeated patterns where useful. Distinguish reference, dependency, derivation, implementation and supersession only when the source material supports that distinction. Do not manufacture edges to satisfy a desired coverage number, infer a dependency merely from co-occurrence, or rewrite substantive meaning to make a graph green. If meaning is unresolved, identify the question and keep the affected classification explicit rather than deciding it in the profile.
 
 ## Realize the profile and documents

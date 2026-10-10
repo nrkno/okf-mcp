@@ -2,6 +2,18 @@
   "description": "Artifact/action expectations for skill evaluation. Cases are specifications, not recorded ablation or baseline results.",
   "cases": [
     {
+      "id": "directional-allow-lists",
+      "request": "Accepted content: requirement.md (type: requirement) links to anchor.md (type: anchor) under Derived from. The profile loads with inverse derives but allowed_source_types: [anchor] and allowed_target_types: [requirement]. Assess formatting, then show the corrected representation and a valid near-miss check.",
+      "expect": ["Identify requirement as link-containing source and anchor as linked target", "Flag both swapped lists; correct to source [requirement] and target [anchor]", "Keep forward constraints unchanged when querying incoming derives", "Check exact frontmatter values; Requirement or a concept alias is not requirement", "Observe graph type warnings separately from document conformance"],
+      "reject": ["Approve swapped lists because the inverse reads anchor derives requirement", "Decide whether the requirement is substantively justified", "Claim profile loading proves type compatibility"]
+    },
+    {
+      "id": "incoming-checked-node-selector",
+      "request": "Accepted obligation: each anchor must have an incoming derived-from link from a requirement. requirement.md links to anchor.md. The invariant uses source_type: requirement, relationship: derives, direction: incoming, min: 1, max: -1. Correct the representation without inventing obligations.",
+      "expect": ["Select anchor with source_type because it is the checked node", "Use forward relationship derived-from for incoming counts", "Keep allowed_source_types [requirement] and allowed_target_types [anchor]", "Exercise valid anchor incoming count and a missing-link case"],
+      "reject": ["Select requirement merely because the field is named source_type", "Use displayed inverse derives as the invariant relationship", "Reverse the written Markdown link to make the rule pass"]
+    },
+    {
       "id": "profile-schema-incident",
       "origin": "Observed repository incident: explicit profile loading failed because requirement-has-source omitted relationship, used incoming despite its outgoing description, and max:null with min:1.",
       "request": "Our documentation says OKF validation passes but the requirement links are untyped. Configure the repository profile from the existing relationships.",

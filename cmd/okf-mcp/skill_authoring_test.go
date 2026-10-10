@@ -71,6 +71,11 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 		}
 		seen[c.ID] = true
 	}
+	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector"} {
+		if !seen[id] {
+			t.Fatalf("missing source/target decision-boundary eval: %s", id)
+		}
+	}
 	// Install a real copy away from the source repository; every live local link
 	// must resolve within this package, not through ../../docs or implementation paths.
 	installed := t.TempDir()
