@@ -10,6 +10,8 @@ timestamp: 2026-10-10T00:00:00Z
 
 ## 2026-10-10
 
+**Update**: `internal/graph/graph.go`, `cmd/okf-mcp/context_depth_test.go` — Bounded `graph_context` depth-2 expansion to the original depth-1 frontiers; added real-MCP mixed-direction and mirrored depth/budget regressions for the third-hop leak found during independent review.
+
 **Update**: `.okf-profile.yaml` — Preserved the main-branch AOS vocabulary; repaired its requirement-source invariant with explicit `relationship: derived-from`, outgoing direction, and unlimited `max: -1`.
 **Update**: `docs/okf-profile.md`, `docs/okf-profile-format.md`, `docs/configuration.md`, `docs/index.md`, `README.md` — Reconciled recovered profile support with repository setup guidance; removed inert-template claims, corrected schema defaults/alias semantics, and separated document conformance from graph validation.
 **Update**: `go.mod` — Raised the Go minimum from 1.26.6 to 1.26.9 to include the standard-library fixes reported by PR20 security CI, which selects its toolchain from this file.

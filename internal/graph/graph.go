@@ -561,8 +561,8 @@ func (g *Graph) Context(filePath string, depth int, maxResults int) ContextSlice
 	truncated = truncated || truncatedDown
 
 	if depth >= 2 {
-		// Expand depth-1 neighbors in the order they were returned.
-		for _, nbr := range ctx.Neighbors.Upstream {
+		// Expand only the original depth-1 frontiers, not newly appended neighbors.
+		for _, nbr := range upstream1 {
 			if rem <= 0 {
 				truncated = true
 				break
@@ -581,7 +581,7 @@ func (g *Graph) Context(filePath string, depth int, maxResults int) ContextSlice
 			rem = r
 			truncated = truncated || t
 		}
-		for _, nbr := range ctx.Neighbors.Downstream {
+		for _, nbr := range downstream1 {
 			if rem <= 0 {
 				truncated = true
 				break
