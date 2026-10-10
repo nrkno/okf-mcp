@@ -4,9 +4,9 @@
 
 **plattform-okf-mcp** is a standalone Go MCP server that scans an OKF-conformant repository for markdown files, builds an in-memory index from YAML frontmatter, and exposes thirteen tools — six core tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) and seven graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) — so agents can query documentation and navigate relationships between documents without traversing files directly. It also provides `--validate` and `--profile` CLI flags and a pre-commit hook for validating doc conformance.
 
-Single binary — no config file, no database, no HTTP, no CGO. The process's current working directory is the scan root: wherever you launch the binary, that directory tree is what gets indexed.
+Single binary — optional repository relationship profile, no database, no HTTP, no CGO. The process's current working directory is the scan root: wherever you launch the binary, that directory tree is what gets indexed. Profile setup and schema are documented in `docs/okf-profile.md` and `docs/okf-profile-format.md`.
 
-Entry point: `cmd/okf-mcp/main.go` — wires the six MCP tool handlers as package-level functions and starts a stdio MCP server via `server.ServeStdio`.
+Entry point: `cmd/okf-mcp/main.go` — wires the thirteen MCP tool handlers as package-level functions and starts a stdio MCP server via `server.ServeStdio`.
 
 ---
 

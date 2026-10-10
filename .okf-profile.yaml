@@ -101,7 +101,8 @@ invariants:
   - id: requirement-has-source
     description: Every requirement node must have at least one outgoing derived-from edge
     source_type: requirement
-    direction: incoming
+    relationship: derived-from
+    direction: outgoing
     min: 1
-    max: null
+    max: -1
     severity: error

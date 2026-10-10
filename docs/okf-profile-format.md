@@ -3,10 +3,12 @@ type: Configuration
 title: OKF Profile Format
 description: Complete reference for the .okf-profile.yaml relationship profile used by okf-mcp to classify Markdown links into typed graph edges and enforce graph integrity invariants.
 tags: [profile, okf, yaml, schema, graph, relationships, invariants]
-timestamp: 2026-09-01T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # OKF Profile Format
+
+For repository setup, OpenCode configuration, and complete documents to exercise a profile, start with [Configuring an OKF Profile](/docs/okf-profile.md).
 
 ## 1. What `.okf-profile.yaml` is
 
@@ -26,10 +28,10 @@ timestamp: 2026-09-01T00:00:00Z
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | **yes** | Canonical concept type name |
+| `name` | string | recommended | Canonical concept type name; not enforced by the loader |
 | `aliases` | string[] | no | Alternative names for the type |
 
-Aliases are matched verbatim; they are **not** normalized like heading aliases. There is no uniqueness check across concept types.
+Aliases are stored verbatim and deduplicated; they are **not** normalized like heading aliases. They do not rewrite document frontmatter types or expand relationship allow-lists. Type checks use exact, case-sensitive frontmatter values. There is no uniqueness check across concept types, and the loader does not enforce non-empty concept names; provide meaningful names when authoring a profile.
 
 ## 4. `relationships[]`
 
@@ -51,7 +53,7 @@ Each heading alias is normalized before it is stored: lowercased, trimmed, and c
 
 ### Wildcard semantics
 
-An empty list, a missing field, or the literal string `"*"` means "any type allowed". A named list restricts the edge to only those concept types.
+An empty list, a missing field, or a list containing `"*"` means "any type allowed". The fields are lists, not scalar strings. A named list restricts the edge to only those exact concept types. Type violations are reported as warnings by `graph_integrity`; the edges are retained.
 
 ### I-31 uniqueness
 
@@ -67,22 +69,24 @@ If `inverse` is omitted or empty, the runtime inverse for that relationship is `
 |-------|------|----------|-------------|
 | `id` | string | **yes** | Short invariant identifier (e.g. `"P1"`) |
 | `description` | string | no | Human-readable explanation |
-| `source_type` | string | no | Concept type to check; `"*"` or omitted means all types |
+| `source_type` | string | no | Type of the node checked, in either direction; use `"*"` explicitly for all types. Omission matches an empty type, not all indexed documents. |
 | `relationship` | string | **yes** | Relationship the invariant applies to |
 | `direction` | string | **yes** | `"incoming"` or `"outgoing"` |
 | `min` | int | no | Minimum required edge count; default `0` |
 | `max` | int | no | Maximum allowed edge count; default `0`; `-1` means unlimited; `0` means forbidden |
 | `severity` | string | **yes** | `"error"`, `"warning"`, or `"notification"` |
 
-An invariant with `min > max` is rejected as contradictory. A `max` of `0` forbids the relationship in the given direction, while `max: -1` places no upper bound.
+A positive `min` greater than a non-negative `max` is rejected as contradictory. A `max` of `0` (also the omitted/null default) forbids the relationship in the given direction, while `max: -1` places no upper bound. Use non-negative minima and `-1` or non-negative maxima.
+
+Incoming checks count the original forward `relationship` name, not its displayed inverse. For example, to require an incoming `implements` link to a requirement, use `source_type: requirement`, `relationship: implements`, `direction: incoming`. Counts are extracted links, not unique target documents. Descriptions are explanatory and do not override fields.
 
 ## 6. How heading classification works
 
-When `okf-mcp` extracts a Markdown link, it records the heading the link sits under. That heading is normalized using the same rules as `heading_aliases` and matched against the profile. If a match is found, the edge is typed with the corresponding relationship. If no match is found, the edge is recorded as `untyped` (per I-25). With no profile loaded, every edge is `untyped` (per I-26).
+When `okf-mcp` extracts a Markdown link, it records the nearest preceding heading, not a matching ancestor heading. That heading is normalized using the same rules as `heading_aliases` and matched against the profile. If a match is found, the edge is typed with the corresponding relationship. If no match is found, the edge is recorded as `untyped` (per I-25), and type allow-list checks skip it. With no profile loaded, every edge is `untyped` (per I-26).
 
 ## 7. Worked example
 
-The following is the shipped `.okf-profile.yaml` from this repository, annotated with inline comments:
+The following is a complete alternative profile for the documentation type vocabulary, annotated with inline comments. It is not the repository's AOS profile; choose the vocabulary that fits your documents:
 
 ```yaml
 # Human-readable name, logged to stderr when the profile is loaded.
@@ -158,6 +162,12 @@ invariants:
 
 Profile selection is always logged to stderr.
 
+The scan root is the server process working directory. Explicit relative paths resolve from that directory. One startup-selected profile applies across all scanned bundles; nested bundle profiles are not independently discovered. Restart/reconnect the server after changing the profile; graph rebuilds do not reload it.
+
+`graph_integrity` evaluates type and cardinality constraints; its `profile_violations` filter includes cardinality findings. `validate_doc` and CLI `--validate` check document conformance separately, not graph constraints. Single-file `validate_doc` supports an explicit `known_types` list; `concept_types` does not configure it. CLI validation creates a default-profile index even when startup loads an explicit profile. Graph findings do not automatically change CLI validation exit codes or block commits.
+
+The loader is not a strict, exhaustive schema validator: unknown fields and undeclared concept/relationship references are not all rejected. Keep field names and relationship/type spellings consistent. A loaded profile with neither relationships nor invariants reports `profile_loaded: false` in graph integrity results.
+
 ## 9. Validation errors
 
 | Error | Cause | Fix |
@@ -167,6 +177,7 @@ Profile selection is always logged to stderr.
 | `relationship ... has no heading aliases` | `heading_aliases` is empty or missing | Add at least one heading alias |
 | `heading alias ... is shared by relationships ...` (I-31) | Two relationships normalize to the same alias | Ensure each normalized alias is unique across all relationships |
 | `invariant id is empty` | An invariant has no `id` | Add a non-empty `id` |
+| `invariant ... has empty relationship` | Missing or blank invariant `relationship` | Supply the forward relationship name |
 | `invariant ... has invalid direction` | `direction` is not `"incoming"` or `"outgoing"` | Use `"incoming"` or `"outgoing"` |
 | `invariant ... has invalid severity` | `severity` is not one of the allowed values | Use `"error"`, `"warning"`, or `"notification"` |
-| `invariant ... has contradictory cardinality` | `min > max` | Adjust `min` and `max` so `min <= max` (or set `max: -1` for unlimited) |
+| `invariant ... has contradictory cardinality` | Positive `min` exceeds non-negative `max` | Adjust bounds or set `max: -1` for unlimited |

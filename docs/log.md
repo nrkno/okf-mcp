@@ -3,10 +3,18 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-09-01T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Directory Update Log
+
+## 2026-10-10
+
+**Update**: `.okf-profile.yaml` — Preserved the main-branch AOS vocabulary; repaired its requirement-source invariant with explicit `relationship: derived-from`, outgoing direction, and unlimited `max: -1`.
+**Update**: `docs/okf-profile.md`, `docs/okf-profile-format.md`, `docs/configuration.md`, `docs/index.md`, `README.md` — Reconciled recovered profile support with repository setup guidance; removed inert-template claims, corrected schema defaults/alias semantics, and separated document conformance from graph validation.
+**Update**: `go.mod` — Raised the Go minimum from 1.26.6 to 1.26.9 to include the standard-library fixes reported by PR20 security CI, which selects its toolchain from this file.
+**Update**: `docs/architecture.md`, `AGENTS.md` — Removed stale no-profile/no-config descriptions from adjacent current-reality guidance.
+**Creation**: `cmd/okf-mcp/profile_docs_test.go` — Exercised published YAML/Markdown and the root AOS profile through the real MCP pipe, including inverse queries, missing sources, wrong target types, nearest-heading classification, and separate document validation.
 
 ## 2026-09-01
 

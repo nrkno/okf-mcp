@@ -3,7 +3,7 @@ type: Architecture
 title: Architecture
 description: Internal structure of okf-mcp — packages, design invariants, the weighted scoring model used by get_doc, the multi-bundle support (--enable-hidden, bundle field, multi-log aggregation), and the graph projection over OKF documents (--profile, relationship classification, link extraction).
 tags: [architecture, scanner, parser, index, matcher, validator, logparser, graph, linkextract, profile, mcp, scoring, multi-bundle, hidden, projection]
-timestamp: 2026-08-31T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Architecture
@@ -235,7 +235,7 @@ A repository may contain more than one OKF bundle: the canonical `docs/` bundle 
 
 ### `--enable-hidden` CLI flag
 
-The scanner skips hidden directories by default (I-5, I-18). A repository that places an OKF bundle inside `.opencode/architecture/` would be invisible to the server. The `--enable-hidden` flag opts in to traversing hidden directories. The flag is the only configuration surface — no env vars, no config file.
+The scanner skips hidden directories by default (I-5, I-18). A repository that places an OKF bundle inside `.opencode/architecture/` would be invisible to the server. The `--enable-hidden` flag opts in to traversing hidden directories. Relationship vocabulary and graph constraints are configured separately through the optional repository profile; see [Configuring an OKF Profile](/docs/okf-profile.md).
 
 ```
 okf-mcp                              # serve — hidden bundles invisible

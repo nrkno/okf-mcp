@@ -6,7 +6,7 @@ An MCP server that makes OKF-conformant documentation queryable by agents.
 
 `okf-mcp` runs as a stdio MCP server alongside your existing MCP host. On every tool call it scans the working directory recursively, builds an in-memory index from the YAML frontmatter of every conformant markdown file it finds, and serves thirteen tools — six core tools (`list_tags`, `list_docs`, `get_doc`, `validate_doc`, `get_index`, `get_log`) and seven graph tools (`graph_concept`, `graph_relationships`, `graph_trace`, `graph_search`, `graph_integrity`, `graph_coverage`, `graph_context`) — so agents can look up docs and navigate relationships between them without traversing the file tree themselves.
 
-The index is rebuilt on each call, so newly added or updated files are always reflected. No config file, no database, no file watcher — just the files in the repo and their frontmatter.
+The index is rebuilt on each call, so newly added or updated documents are reflected. The optional `.okf-profile.yaml` is loaded at startup to classify relationships and check graph constraints. No database or file watcher is required. See [Configuring an OKF Profile](docs/okf-profile.md) for repository setup and OpenCode examples.
 
 **Frontmatter quality is a functional requirement.** A missing or vague `description` means the wrong document gets returned, or none at all. Treat `title`, `description`, and `tags` as part of the feature, not optional metadata.
 
@@ -68,6 +68,8 @@ If an `.okf-profile.yaml` file exists in the scan root, it is loaded automatical
 MCP hosts require an explicit allow-list of tool calls before an agent can invoke them. The permission string format depends on the host.
 
 ### opencode
+
+The examples below use an earlier host configuration format. For OpenCode V2, including scan-root `cwd` and explicit profile loading, use [Configuring an OKF Profile](docs/okf-profile.md).
 
 In opencode, tool permissions follow the pattern `mcp__<server-key>__<tool-name>`, where the server key matches the key you used in the `mcp` block of `opencode.json`. Using the server key `okf-mcp` (as shown in the Usage section above), the thirteen permission strings are:
 
@@ -171,7 +173,7 @@ okf-mcp: WARN: docs/auth.md: missing description
 
 ## CLI flags
 
-`okf-mcp` has no config file, no env vars, no remote settings. The full configuration surface is the four flags below. Pass them on the command line.
+Pass the four flags below on the command line. The optional repository `.okf-profile.yaml` configures relationships and graph constraints; see [Configuring an OKF Profile](docs/okf-profile.md) and the [format reference](docs/okf-profile-format.md).
 
 ```
 okf-mcp [flags]

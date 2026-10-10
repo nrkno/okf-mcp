@@ -1,18 +1,18 @@
 ---
 type: Configuration
 title: Configuration
-description: How to register okf-mcp in MCP hosts, supported CLI flags, and the distinction between runtime configuration and the .okf-profile.yaml template.
+description: How to register okf-mcp in MCP hosts and configure repository profiles, CLI flags, working directories, and graph validation.
 tags: [configuration, mcp, opencode, claude, permissions, client-setup, multi-bundle, hidden, okf-profile]
 timestamp: 2026-10-10T00:00:00Z
 ---
 
 # Configuration
 
-## No config file
+## Repository profile and scan root
 
-`okf-mcp` has no configuration file of its own. The only runtime input is the process working directory, which becomes the scan root. Run the binary from the repository root you want to index.
+The process working directory becomes the scan root. Run the binary from the repository root you want to index, or set that directory in the host configuration.
 
-The checked-in `.okf-profile.yaml` is a vocabulary declaration/template, not a runtime configuration file: this checkout does not load or enforce profiles. See [OKF Profile Template](/docs/okf-profile.md) for editing examples, field meanings, and limitations.
+Create `.okf-profile.yaml` at that root to configure relationship classification and graph integrity checks. See [Configuring an OKF Profile](/docs/okf-profile.md) for complete examples and OpenCode V2 setup, and [OKF Profile Format](/docs/okf-profile-format.md) for fields and defaults.
 
 ## CLI flags
 
@@ -26,7 +26,7 @@ Flags:
   -profile string   Path to an OKF relationship profile YAML file
 ```
 
-The flags are the only configuration surface. There are no env vars, no config file, no remote KV. Pass them on the command line.
+Pass flags on the command line. The repository profile is loaded at startup using the `--profile` override or scan-root discovery described below; restart the server to reload profile edits.
 
 ### `--validate`
 
@@ -94,6 +94,8 @@ okf-mcp: loaded profile "Domain" from /path/to/repo/.okf-profile.yaml
 This confirms which directory is being scanned and which profile was loaded. If the path is wrong, adjust the working directory in the host configuration.
 
 ## opencode
+
+The example below uses an earlier OpenCode host format. For current OpenCode V2, including explicit profile loading and `cwd`, use [Configuring an OKF Profile](/docs/okf-profile.md).
 
 Add a server entry to `opencode.json` and include all tool names in the `permissions.allow` list:
 
