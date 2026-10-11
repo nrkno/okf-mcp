@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nrkno/plattform-okf-mcp/internal/profile"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 )
 
@@ -70,7 +71,7 @@ func TestI7_ZeroConformantFiles(t *testing.T) {
 	dir := t.TempDir()
 	writeRaw(t, dir, "README.txt", "not markdown")
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() unexpected error: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestTagsSortedAndDeduped(t *testing.T) {
 	writeDoc(t, dir, "alpha.md", "Alpha", "guide", []string{"zebra", "apple"})
 	writeDoc(t, dir, "beta.md", "Beta", "reference", []string{"apple", "mango"})
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() unexpected error: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestI3_MissingTypeNotIndexed(t *testing.T) {
 	// Conformant doc to confirm Rebuild works at all.
 	writeDoc(t, dir, "ok.md", "OK Doc", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() unexpected error: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestI4_IndexMdNotIndexed(t *testing.T) {
 	writeRaw(t, dir, "index.md", "---\ntitle: Index\ndescription: Reserved.\ntype: guide\n---\n# Body\n")
 	writeDoc(t, dir, "regular.md", "Regular", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() unexpected error: %v", err)
 	}
@@ -166,7 +167,7 @@ func TestI5_HiddenDirNotIndexed(t *testing.T) {
 	writeDoc(t, dir, ".hidden/doc.md", "Hidden Doc", "guide", nil)
 	writeDoc(t, dir, "visible.md", "Visible Doc", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() unexpected error: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestDoubleRebuild(t *testing.T) {
 	writeDoc(t, dir, "a.md", "A", "guide", nil)
 	writeDoc(t, dir, "b.md", "B", "reference", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("first Rebuild() error: %v", err)
@@ -216,7 +217,7 @@ func TestFilePathIsRelative(t *testing.T) {
 	writeDoc(t, dir, "sub/doc.md", "Sub Doc", "guide", nil)
 	writeDoc(t, dir, "root.md", "Root Doc", "reference", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -236,7 +237,7 @@ func TestDocsCopy(t *testing.T) {
 	dir := t.TempDir()
 	writeDoc(t, dir, "one.md", "One", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestReserved_AppearsInReserved(t *testing.T) {
 	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
 	writeDoc(t, dir, "docs/arch.md", "Arch", "Architecture", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -305,7 +306,7 @@ func TestReserved_NotInDocs(t *testing.T) {
 	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
 	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -326,7 +327,7 @@ func TestReserved_FrontmatterDetection(t *testing.T) {
 	writeReserved(t, dir, "index.md", "# Index\n")
 	writeReserved(t, dir, "docs/log.md", "---\ntitle: Log\ntype: Log\n---\n# Log\n")
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -368,7 +369,7 @@ func TestTree_MultiLevel(t *testing.T) {
 	writeDoc(t, dir, "docs/tools.md", "Tools", "API Reference", nil)
 	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -423,7 +424,7 @@ func TestTree_EmptyIndex(t *testing.T) {
 	dir := t.TempDir()
 	writeRaw(t, dir, "README.txt", "not markdown")
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -446,7 +447,7 @@ func TestTree_IncludesReservedAsReservedType(t *testing.T) {
 	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
 	writeDoc(t, dir, "docs/arch.md", "Arch", "Architecture", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -508,7 +509,7 @@ func TestBundle_Resolution(t *testing.T) {
 	writeReserved(t, dir, "docs/index.md", "# Index\n")
 	writeDoc(t, dir, "docs/sub/deep.md", "Deep Doc", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -532,7 +533,7 @@ func TestBundle_Fallback(t *testing.T) {
 	dir := t.TempDir()
 	writeDoc(t, dir, "random/notes.md", "Notes", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -557,7 +558,7 @@ func TestBundle_RootFile(t *testing.T) {
 	writeReserved(t, dir, "index.md", "# Index\n")
 	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -581,7 +582,7 @@ func TestBundle_RootFileNoIndex(t *testing.T) {
 	dir := t.TempDir()
 	writeDoc(t, dir, "guide.md", "Guide", "guide", nil)
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -606,7 +607,7 @@ func TestBundle_ReservedFileBundle(t *testing.T) {
 	writeReserved(t, dir, "docs/index.md", "# Index\n")
 	writeReserved(t, dir, "docs/log.md", "---\ntype: Log\n---\n# Log\n")
 
-	idx := New(dir, scanner.ScanOptions{})
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}
@@ -622,6 +623,76 @@ func TestBundle_ReservedFileBundle(t *testing.T) {
 	t.Fatal("docs/log.md not found in Reserved()")
 }
 
+// TestRebuild_PopulatesGraph verifies that Rebuild() builds the graph
+// projection with one node per indexed doc and that Graph() is never nil
+// (I-28).
+func TestRebuild_PopulatesGraph(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeDoc(t, dir, "alpha.md", "Alpha", "guide", []string{"a"})
+	writeDoc(t, dir, "beta.md", "Beta", "reference", []string{"b"})
+	writeDoc(t, dir, "subdir/gamma.md", "Gamma", "guide", []string{"c"})
+
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	g := idx.Graph()
+	if g == nil {
+		t.Fatal("Graph() returned nil; want non-nil graph")
+	}
+	if g.Nodes == nil {
+		t.Fatal("graph.Nodes is nil")
+	}
+
+	wantPaths := map[string]bool{
+		"alpha.md":        false,
+		"beta.md":         false,
+		"subdir/gamma.md": false,
+	}
+	for path := range wantPaths {
+		if _, ok := g.Nodes[path]; !ok {
+			t.Errorf("graph missing node %q", path)
+		} else {
+			wantPaths[path] = true
+		}
+	}
+	if len(g.Nodes) != len(wantPaths) {
+		t.Errorf("graph has %d nodes, want %d", len(g.Nodes), len(wantPaths))
+	}
+
+	// Verify node metadata is carried over from the indexed doc.
+	if n, ok := g.Nodes["alpha.md"]; !ok {
+		t.Error("alpha.md node missing")
+	} else if n.FilePath != "alpha.md" || n.Title != "Alpha" || n.Type != "guide" {
+		t.Errorf("alpha.md node = %+v, want FilePath=alpha.md, Title=Alpha, Type=guide", n)
+	}
+}
+
+// TestGraph_EmptyCorpus verifies that Graph() returns a non-nil empty graph
+// when the corpus contains no indexed docs (I-28).
+func TestGraph_EmptyCorpus(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeRaw(t, dir, "README.txt", "not markdown")
+
+	idx := New(dir, scanner.ScanOptions{}, profile.Default())
+	if err := idx.Rebuild(); err != nil {
+		t.Fatalf("Rebuild() error: %v", err)
+	}
+
+	g := idx.Graph()
+	if g == nil {
+		t.Fatal("Graph() returned nil on empty corpus")
+	}
+	if len(g.Nodes) != 0 {
+		t.Errorf("empty corpus graph has %d nodes, want 0", len(g.Nodes))
+	}
+}
+
 // TestTree_TwoBundles verifies that the tree correctly represents two
 // independent bundles, including one in a hidden directory, with proper
 // bundle fields on leaf nodes.
@@ -634,7 +705,7 @@ func TestTree_TwoBundles(t *testing.T) {
 	writeReserved(t, dir, ".opencode/architecture/index.md", "# OpenCode Index\n")
 	writeDoc(t, dir, ".opencode/architecture/design.md", "Design", "Design", nil)
 
-	idx := New(dir, scanner.ScanOptions{EnableHidden: true})
+	idx := New(dir, scanner.ScanOptions{EnableHidden: true}, profile.Default())
 	if err := idx.Rebuild(); err != nil {
 		t.Fatalf("Rebuild() error: %v", err)
 	}

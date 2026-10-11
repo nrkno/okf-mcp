@@ -577,6 +577,17 @@ One PR, five reviewable commits in dependency order:
 
 5. **Commit 5: CLI wiring + docs + invariants.** Wire `--enable-hidden` flag in `main()`, pass through to `index.New` in both MCP and `--validate` paths. Add `TestValidate_HiddenBundle`. Update `AGENTS.md` invariants (I-5, I-12, I-17, I-18, I-19). Update `docs/architecture.md`, `docs/configuration.md`, `docs/log.md` per the OKF update obligation.
 
+## Dependencies
+
+- [Architecture](/docs/architecture.md) — the invariant framework this design extends (I-5, I-12) and the new invariants I-17 through I-19
+
+## Related
+
+- [Validator, Bundle Tree, and Structured Log](okf-mcp-validator-tree-log-design.md) — `--enable-hidden` composes with `--validate` for hidden-bundle validation
+- [`get_doc` Response Shape](get-doc-response-shape.md) — the `get_doc` response this design extends with the `bundle` field
+- [MCP Tools Reference](/docs/tools.md) — `get_log`, `get_index`, and `list_docs` tools affected by multi-bundle changes
+- [Configuration](/docs/configuration.md) — `--enable-hidden` CLI flag registration and host setup
+
 ## Log
 
 - 2026-07-23: Initial design for multi-bundle support — CLI flag, bundle resolution, log aggregation, response shapes, invariant updates

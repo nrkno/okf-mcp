@@ -7,6 +7,7 @@ import (
 
 	"github.com/nrkno/plattform-okf-mcp/internal/index"
 	"github.com/nrkno/plattform-okf-mcp/internal/parser"
+	"github.com/nrkno/plattform-okf-mcp/internal/profile"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 )
 
@@ -359,7 +360,7 @@ func TestValidateBundle_IndexMDNeverTriggersE1(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "index.md", "# Welcome\n\nThis is the index.\n")
 	writeFile(t, dir, "guide.md", "---\ntype: guide\ntitle: Guide\ndescription: A guide\ntags:\n  - a\n---\nBody\n")
-	idx := index.New(dir, scanner.ScanOptions{})
+	idx := index.New(dir, scanner.ScanOptions{}, profile.Default())
 	result := ValidateBundle(idx)
 	if hasCode(result.Findings, "E1") {
 		t.Errorf("index.md must never trigger E1 in ValidateBundle, got findings: %v", result.Findings)
@@ -372,7 +373,7 @@ func TestValidateBundle_FullBundleValidation(t *testing.T) {
 	writeFile(t, dir, "index.md", "# Index\n")
 	writeFile(t, dir, "guide.md", "---\ntype: guide\ntitle: Guide\ndescription: A guide\ntags:\n  - go\n---\nBody\n")
 	writeFile(t, dir, "log.md", "---\ntype: Log\n---\n## 2025-01-01\n**Creation**: `guide.md` — see [guide](/docs/guide.md)\n")
-	idx := index.New(dir, scanner.ScanOptions{})
+	idx := index.New(dir, scanner.ScanOptions{}, profile.Default())
 	result := ValidateBundle(idx)
 	if result.Summary.Files != 3 {
 		t.Errorf("expected 3 files, got %d", result.Summary.Files)
@@ -389,7 +390,7 @@ func TestValidateBundle_InvalidDocInBundle(t *testing.T) {
 	// Doc with frontmatter but no title/description/tags — goes through the
 	// index (parser.Parse keeps it) but produces warnings from ValidateDoc.
 	writeFile(t, dir, "minimal.md", "---\ntype: guide\n---\n")
-	idx := index.New(dir, scanner.ScanOptions{})
+	idx := index.New(dir, scanner.ScanOptions{}, profile.Default())
 	result := ValidateBundle(idx)
 	if !hasCode(result.Findings, "W1") {
 		t.Errorf("expected W1 for doc missing title, got findings: %v", result.Findings)
@@ -407,7 +408,7 @@ func TestValidateBundle_ConvertsRelativePathsToAbsolute(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "index.md", "# Index\n")
 	writeFile(t, dir, "doc.md", "no frontmatter\n")
-	idx := index.New(dir, scanner.ScanOptions{})
+	idx := index.New(dir, scanner.ScanOptions{}, profile.Default())
 	result := ValidateBundle(idx)
 	for _, f := range result.Findings {
 		if f.Code == "E1" {

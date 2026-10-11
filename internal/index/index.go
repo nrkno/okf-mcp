@@ -9,7 +9,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nrkno/plattform-okf-mcp/internal/graph"
 	"github.com/nrkno/plattform-okf-mcp/internal/parser"
+	"github.com/nrkno/plattform-okf-mcp/internal/profile"
 	"github.com/nrkno/plattform-okf-mcp/internal/scanner"
 	"gopkg.in/yaml.v3"
 )
@@ -39,15 +41,20 @@ type TreeNode struct {
 type Index struct {
 	dir      string // absolute path to scan root
 	scanOpts scanner.ScanOptions
+	profile  *profile.Profile
 	mu       sync.Mutex
 	docs     []parser.Doc
 	reserved []ReservedFile
+	graph    *graph.Graph
 }
 
 // New returns an empty Index rooted at dir.
 // Call Rebuild to populate it.
-func New(dir string, opts scanner.ScanOptions) *Index {
-	return &Index{dir: dir, scanOpts: opts}
+func New(dir string, opts scanner.ScanOptions, prof *profile.Profile) *Index {
+	if prof == nil {
+		prof = profile.Default()
+	}
+	return &Index{dir: dir, scanOpts: opts, profile: prof}
 }
 
 // Dir returns the absolute path to the scan root for this Index.
@@ -121,12 +128,31 @@ func (idx *Index) Rebuild() error {
 		fmt.Fprintf(os.Stderr, "okf-mcp: WARN: no conformant OKF docs found in %s\n", idx.dir)
 	}
 
+	// Build the derived graph projection under the same mutex so the graph
+	// is always consistent with the docs/reserved slices exposed by this
+	// Rebuild (I-20, I-28).
+	g := graph.Build(docs, idx.dir, idx.profile)
+
 	idx.mu.Lock()
 	idx.docs = docs
 	idx.reserved = reserved
+	idx.graph = g
 	idx.mu.Unlock()
 
 	return nil
+}
+
+// Graph returns the graph projection from the last Rebuild.
+// The returned graph is never nil: an empty corpus yields an empty but
+// initialized graph (I-28).
+func (idx *Index) Graph() *graph.Graph {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+
+	if idx.graph == nil {
+		return graph.Build(nil, idx.dir, idx.profile)
+	}
+	return idx.graph
 }
 
 // Docs returns a copy of the indexed doc slice.

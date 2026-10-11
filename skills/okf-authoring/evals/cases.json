@@ -1,0 +1,79 @@
+{
+  "skill": "okf-authoring",
+  "version": "1.0.0",
+  "shape": 1,
+  "cases": [
+    {
+      "id": "mixed-corpus-authoring",
+      "name": "Derive a useful profile from a mixed corpus",
+      "trap": "Generic related-to edges or mandatory coverage rules erase evidence-backed distinctions; indexed discovery alone misses documents. No ablation result is claimed.",
+      "prompt": "Author a complete .okf-profile.yaml inline and explain the evidence and alternatives behind it. Scan root is repo/. Inventory: docs/index.md owns goal.md, retry.md, timeout.md, client.md, guide.md, draft.md and log.md. get_index lists everything except draft.md. Inline corpus: goal.md has type: anchor and body '# Goal\\nReliable requests'; retry.md has type: requirement and body '# Retry\\n## Derived from\\n- [Goal](goal.md)'; timeout.md has type: requirement and body '# Timeout\\n## Source goal\\n- [Goal](goal.md)'; client.md has type: design and body '# Client\\nImplements retry. Runtime operation requires the protocol specified by guide.\\n## Implements\\n- [Retry](retry.md)\\n## Further reading\\n- [Guide](guide.md)'; guide.md has type: Playbook and body '# Guide\\nProtocol and background reading'; draft.md has no frontmatter and body '# Draft\\nFuture options'. All listed type fields are valid frontmatter. Accepted policy: requirements cite one or more anchors; only requirements may derive from anchors; only designs may implement requirements. Optional background reading is not a closed type domain. The draft is an intentionally unpublished scratch asset. There are no other coverage obligations. We need motivation and realization queries now; operational dependency queries may be useful later. Show your discovery reconciliation, proposed profile, any source edits you would request, and representative checks without executing tools.",
+      "expectations": ["Produce parseable complete profile YAML with required version 1.0 (profile name is optional), relationships derived from actual link evidence and one outgoing requirement minimum with explicit relationship and max -1", "Map Derived from and Source goal to one derivation relationship with exact requirement/anchor allow-lists; map Implements to design/requirement", "Trace each choice to source heading, target type and accepted meaning; reconcile draft as excluded scratch from inventory evidence rather than tool absence", "Keep reading untyped or unrestricted references with a reason; distinguish prose prerequisite from reading and propose a dependency-heading link only as an authorized optional source edit", "Justify omissions of maximum-one, mandatory implementation, anchor coverage and dependency rules; explain an alternative vocabulary tradeoff", "Describe expected missing-source, nearest-heading and optional-reading near-misses and separate graph from conformance verification"],
+      "negative_expectations": ["Missing/malformed profile artifact even with a good explanation", "Map Further reading to depends-on or implements", "Invent mandatory implementation or anchor coverage, or impose a closed reference type domain", "Hide missing draft solely because it is not indexed", "Claim unexecuted runtime verification passed"]
+    },
+    {
+      "id": "directional-allow-lists",
+      "name": "Check a proposed directional profile",
+      "trap": "Readable incoming inverses conceal reversed forward constraints.",
+      "prompt": "Review and return corrected complete YAML inline. requirement.md (type: requirement) contains '## Derived from\\n- [Goal](anchor.md)'; anchor.md has type: anchor. Accepted relation is requirement derived from anchor. Proposed profile: name: repo; version: '1.0'; relationships: [{name: derived-from, heading_aliases: [Derived from], inverse: derives, allowed_source_types: [anchor], allowed_target_types: [requirement]}]. No cardinality obligation exists. Explain an incoming query and a wrong-type near-miss without execution.",
+      "expectations": ["Actual parseable complete YAML has source [requirement], target [anchor], inverse derives and heading alias Derived from", "Incoming anchor query displays derives without reversing constraints; wrong exact target type causes a graph warning, not a document-format error"],
+      "negative_expectations": ["Explanation without corrected YAML", "Reverse the document link or add a cardinality obligation", "Treat concept aliases as type normalization or profile loading as compatibility proof"]
+    },
+    {
+      "id": "incoming-checked-node-selector",
+      "name": "Represent an accepted incoming coverage rule",
+      "trap": "source_type is mistaken for the edge source; displayed inverse is used for counting.",
+      "prompt": "Return a complete inline profile for this accepted rule: every anchor has at least one requirement that derives from it, with no upper bound. requirement.md (type requirement) links to anchor.md (type anchor) under Derived from. Existing relation name derived-from, inverse derives. Keep that vocabulary and show which node a missing-link check flags.",
+      "expectations": ["Parseable complete YAML uses forward allow-lists requirement/anchor and invariant source_type anchor, relationship derived-from, direction incoming, min 1, max -1", "Explain that missing-link coverage flags anchor and keep the written link direction unchanged"],
+      "negative_expectations": ["Omit YAML or count derives", "Select requirement for incoming anchor coverage", "Invent a requirement outgoing obligation"]
+    },
+    {
+      "id": "profile-schema-incident",
+      "name": "Investigate green conformance with untyped links",
+      "trap": "Observed incident lineage: failed explicit profile loading and automatic fallback were mistaken for successful graph enforcement; not an ablation result.",
+      "prompt": "CLI --validate passes. Graph shows requirement links as untyped. Accepted rule: requirements cite at least one anchor under Derived from; there is no maximum. Intended profile below, but startup executable/root and selection log have not been collected. Return corrected complete YAML and an investigation sequence inline, without claiming execution. name: repo; version: '1.0'; relationships: [{name: derived-from, heading_aliases: [Derived from], inverse: derives, allowed_source_types: [requirement], allowed_target_types: [anchor]}]; invariants: [{id: requirement-has-source, description: Requirements cite anchors, source_type: requirement, direction: incoming, min: 1, max: null}].",
+      "expectations": ["Correct complete YAML adds relationship derived-from, outgoing and max -1 while preserving justified fields", "Inspect actual executable capabilities, scan root, startup selection/stderr, then restart and inspect links/nearest headings and graph integrity", "Separate CLI conformance from graph enforcement and distinguish explicit failure from discovered-profile fallback"],
+      "negative_expectations": ["Explanation without repaired artifact", "Invent new relationships or cite old binary behavior as current evidence", "Claim checks already succeeded"]
+    },
+    {
+      "id": "index-missing-document",
+      "name": "Reconcile a real bundle inventory",
+      "trap": "Reserved-file validator success is mistaken for complete inventory.",
+      "prompt": "Return corrected docs/index.md inline. Scan root repo/; convention: each bundle index inventories all its own published docs including log, links child indices for navigation, no self-link. File inventory: docs/a.md, docs/b.md, docs/log.md, docs/child/index.md, docs/child/c.md. All are conformant, child owns c.md. Current docs/index.md is '# Docs\\n- [A](/docs/a.md)'. validate_doc reports no errors. Explain the reconciliation.",
+      "expectations": ["Actual plain Markdown index without frontmatter links /docs/a.md, /docs/b.md, /docs/log.md and /docs/child/index.md exactly once with no stale/self/c.md entries", "Explain inventory/membership checks independently of validator green"],
+      "negative_expectations": ["Only describe missing entries instead of producing index", "Flatten c.md into parent or add YAML frontmatter", "Approve completeness from validation"]
+    },
+    {
+      "id": "current-log-entry",
+      "name": "Deliver current document and log edits",
+      "trap": "Mentioning a current entry substitutes for actually producing the requested edits.",
+      "prompt": "Scenario date 2026-10-10. Return complete docs/a.md and docs/log.md inline. Convention: documents have type/title/description/tags/timestamp; log has type Log and dated newest-first entries formatted '**Update**: [A](/docs/a.md) — detail'. Existing a.md: frontmatter type Architecture, title A, description A map, tags [architecture], timestamp 2026-10-09T00:00:00Z; body '# A\\nOld map.' Accepted body replacement is '# A\\nCurrent map.' Existing log.md: frontmatter type Log; body '# Log\\n\\n## 2026-10-09\\n\\n**Creation**: [A](/docs/a.md) — Created map.' Preserve history and substantive content exactly.",
+      "expectations": ["Produce two valid complete Markdown artifacts with YAML frontmatter; a.md retains metadata and accepted body with a valid ISO timestamp dated 2026-10-10; any supported time of day is acceptable, not only midnight", "log.md has type Log, new 2026-10-10 Update naming /docs/a.md before unchanged 2026-10-09 Creation history"],
+      "negative_expectations": ["Only explain edits, omit either artifact or emit malformed metadata", "Use yesterday/current wall-clock date instead of scenario date", "Rewrite history or change accepted body"]
+    },
+    {
+      "id": "nested-bundle-and-native-skill",
+      "name": "Publish a reference beside native skill assets",
+      "trap": "Native harness metadata is forced into OKF or nested membership is flattened.",
+      "prompt": "Show complete inline artifacts for .opencode/skills/example/SKILL.md, its references/index.md, .opencode/skills/example/references/guide.md and docs/index.md. Scenario date 2026-10-10. Scan root repo/, hidden traversal enabled. Parent docs bundle owns docs/a.md and docs/log.md. Convention inventories own docs/log and navigates separately published bundles by linking their index; no self-links. references/ is a separately published bundle owning only guide.md; it uses shared docs/log.md (do not create a child log). Native SKILL.md needs name: example and description: Explain the local guide; body '# Example\\nRead the guide.' It is a harness asset, not a publication. Guide metadata: type Playbook, title Guide, description Local procedure, tags [guide]; accepted body '# Guide\\nUse the approved procedure.' Explain validation scope and applicable log follow-up; no other artifact requested.",
+      "expectations": ["Emit all four valid artifacts: native name/description without type; guide Playbook metadata with scenario timestamp and exact accepted body", "Reference index has no frontmatter and only guide link; docs index has a.md/log.md and navigation to /.opencode/skills/example/references/index.md, not guide/SKILL.md as owned docs", "Explain hidden discovery, native-vs-document validation and shared current-date docs/log.md follow-up"],
+      "negative_expectations": ["Missing/malformed artifacts despite correct explanation", "Add OKF type to native SKILL.md", "Flatten nested guide into parent inventory or invent child log"]
+    },
+    {
+      "id": "content-review-negative-space",
+      "name": "Keep representation review bounded",
+      "trap": "Green formatting becomes substantive architectural approval.",
+      "prompt": "An architect asks you to approve the statement 'Retries guarantee exactly-once delivery' because document conformance, index, log currency and profile representation checks passed. What can an OKF formatting assessment conclude, and what remains outside it? Do not rewrite the accepted text.",
+      "expectations": ["Conclude only representation/conformance within the checked scope, not substantive guarantee correctness", "Identify separate substantive assessment without changing the text"],
+      "negative_expectations": ["Approve exactly-once guarantee from formatting success", "Rewrite the guarantee as part of formatting review"]
+    },
+    {
+      "id": "portable-install-and-tool-absence",
+      "name": "Produce an offline portable document",
+      "trap": "Installation requires the source checkout or offline work invents runtime proof.",
+      "prompt": "No MCP connection or source checkout is available. The entire installed okf-authoring skill directory including references and license is present. Explain how to use it and configure a later profile-capable server, and return docs/recovery.md inline. Scenario date 2026-10-10; target convention requires type Playbook, title Recovery, description Approved recovery procedure, lowercase tags [recovery], current timestamp, scan-root-relative links. Accepted body '# Recovery\\nFollow the approved runbook.\\n## References\\n- [Operations](/docs/operations.md)'. Local inventory confirms operations.md exists and docs/index.md and docs/log.md govern this bundle. Identify follow-up inventory/log and verification work; do not execute or invent it.",
+      "expectations": ["Produce a complete valid document with requested metadata, a valid ISO timestamp dated 2026-10-10 and unchanged accepted body/link; any supported time of day is acceptable, not only midnight", "Use installed direct format/setup references and target rules without source checkout; explain executable, --profile and scan-root working directory prerequisites", "Name docs/index.md inventory and current docs/log.md entry as follow-up; mark runtime conformance/profile checks unproven"],
+      "negative_expectations": ["Missing/malformed document even with good installation advice", "Require paths outside installed package for basic setup", "Claim MCP verification or actual installation executed"]
+    }
+  ]
+}

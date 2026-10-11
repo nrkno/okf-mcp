@@ -1,9 +1,10 @@
 module github.com/nrkno/plattform-okf-mcp
 
-go 1.26.5
+go 1.26.9
 
 require (
 	github.com/mark3labs/mcp-go v0.56.0
+	github.com/yuin/goldmark v1.8.5
 	gopkg.in/yaml.v3 v3.0.1
 )
 

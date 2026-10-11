@@ -1,9 +1,9 @@
 ---
 type: Architecture
 title: OKF Standard
-description: The Open Knowledge Format v0.1 frontmatter schema, type vocabulary, skip rules, and authoring conventions as implemented by okf-mcp.
+description: The Open Knowledge Format v0.1 document convention, indexing rules, reserved files, and distinction between validator checks and authoring obligations.
 tags: [okf, frontmatter, standard, conventions, index, log]
-timestamp: 2026-07-16T00:00:00Z
+timestamp: 2026-10-10T00:00:00Z
 ---
 
 # OKF Standard
@@ -14,7 +14,7 @@ OKF (Open Knowledge Format) v0.1 is a lightweight frontmatter convention for mar
 
 ## Frontmatter schema
 
-Every content document must begin with a YAML frontmatter block delimited by `---`:
+Every ordinary OKF content document must begin with a YAML frontmatter block delimited by `---`. Reserved files have their own rules below. Native skill metadata and other non-document assets are not automatically OKF content documents:
 
 ```yaml
 ---
@@ -34,7 +34,7 @@ timestamp: 2026-07-15T00:00:00Z
 | `tags` | Strongly recommended | **2×** | Tag-filtered search; missing → indexed with no tags |
 | `timestamp` | NRK convention | — | ISO 8601 timestamp of last significant edit; always include |
 
-`type` is the only hard requirement enforced by okf-mcp. The other fields degrade matching quality rather than preventing indexing.
+Valid YAML frontmatter with non-empty `type` is the document indexing gate. The other fields improve retrieval rather than preventing indexing. Single-file document validation reports errors for missing/invalid frontmatter or empty type, and warnings for missing retrieval fields. Whole-corpus validation only visits indexed documents and reserved files, so skipped files need independent inventory inspection. Timestamps and tag-case/style conventions are not enforced by the validator.
 
 ## Type vocabulary
 
@@ -51,13 +51,13 @@ NRK Plattform uses these six `type` values:
 
 **Note:** `Metrics Reference` is intended for services that expose structured numeric metrics (e.g. Prometheus, OpenTelemetry). okf-mcp does not expose metrics, so no example of this type exists in this repository.
 
-okf-mcp does not enforce or validate the `type` value; any non-empty string passes the indexing gate. The vocabulary above is a convention, not a filter.
+Any non-empty type string passes the indexing gate. The vocabulary above is a convention, not an indexing filter. Single-file validation can warn about types outside its standard or supplied `known_types`; bundle validation derives known types from indexed documents. Profile graph checks use their own exact type allow-lists separately.
 
 ## Skip rules enforced by okf-mcp
 
 Files are skipped when any of the following apply (applied in order during scanning):
 
-1. **Hidden directory** — any directory whose name starts with `.` is skipped entirely, along with all its contents. This includes `.git`, `.opencode`, `.github`, etc.
+1. **Hidden directory** — directories starting with `.` are skipped by default. `--enable-hidden` permits traversal except VCS internals `.git`, `.hg`, `.svn`, which are always skipped.
 2. **OKF-reserved filename** — files named exactly `index.md` or `log.md` are never indexed, regardless of their contents.
 3. **Non-markdown extension** — files whose extension is not `.md` are skipped.
 4. **No frontmatter** — files that do not begin with `---\n` are skipped silently.
@@ -109,3 +109,5 @@ When modifying an existing document:
 2. Add an entry to `docs/log.md` under today's date describing what changed.
 
 When creating a new document: add it to `docs/index.md` and add a creation entry to `docs/log.md`.
+
+These paths name this repository's documentation bundle. In another repository, resolve the affected bundle's index and governing log from its own conventions; nested bundles are not automatically flattened into their parent. Index inventories must reference all applicable owned documents, and change logs must have current-date entries for documentation changes. Existing validation checks index frontmatter and Log metadata plus log-link/order notifications; it does not prove inventory completeness, log currency, timestamps, or substantive content correctness. Inspect those obligations independently.

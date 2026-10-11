@@ -234,6 +234,16 @@ Option C (frontmatter stripped) **marginally reduces** information-disclosure su
 | Option E excluded          | Partial-content false-confidence failure: agent acts on truncated content as if complete. No invariant broken, but reliability promise is degraded.                                         | No — excluded unconditionally                                                                                                 |
 | Prompt-injection hardening | Content from docs reaches the agent's context window; a maliciously crafted doc could attempt to influence agent behaviour. Not mitigated technically.                                      | Accepted for local dev tool with trusted agent consumer; must be re-evaluated if server is ever exposed to untrusted callers. |
 
+## Dependencies
+
+- [Architecture](/docs/architecture.md) — the invariant framework this design extends (I-1, I-2, I-7)
+
+## Related
+
+- [Sub-Document Section Tagging](sub-document-section-tagging.md) — evaluates the same retrieval precision question from the corpus side
+- [Multi-Bundle Support](multi-bundle-support.md) — adds the `bundle` field to `get_doc` response shape
+- [MCP Tools Reference](/docs/tools.md) — the `get_doc` tool definition and response contract
+
 ## Log
 
 - 2026-07-17: Added OKF frontmatter and Log section (initial architecture decision record).
