@@ -74,7 +74,7 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	if cases.Version != "1.0.0" {
 		t.Fatal("published package version changed; update this package assertion intentionally")
 	}
-	if len(cases.Cases) != 9 {
+	if len(cases.Cases) != 12 {
 		t.Fatal("missing decision-boundary eval cases")
 	}
 	seen := map[string]bool{}
@@ -84,7 +84,7 @@ func TestOKFAuthoringPortablePackage(t *testing.T) {
 	if !seen["mixed-corpus-authoring"] {
 		t.Fatal("missing corpus-to-profile methodology case")
 	}
-	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector", "profile-schema-incident", "index-missing-document", "current-log-entry", "nested-bundle-and-native-skill", "content-review-negative-space", "portable-install-and-tool-absence"} {
+	for _, id := range []string{"directional-allow-lists", "incoming-checked-node-selector", "profile-schema-incident", "index-missing-document", "current-log-entry", "nested-bundle-and-native-skill", "content-review-negative-space", "portable-install-and-tool-absence", "bounded-retrieval-for-parallel-change", "parallel-shared-document-convergence", "upstream-v02-local-v01-compatibility"} {
 		if !seen[id] {
 			t.Fatalf("missing source/target decision-boundary eval: %s", id)
 		}
