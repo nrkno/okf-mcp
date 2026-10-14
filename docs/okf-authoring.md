@@ -1,14 +1,26 @@
 ---
 type: Playbook
 title: Portable OKF Authoring Skill
-description: Install and maintain the reusable okf-authoring skill, its formatting-only assessment, synchronized portable references, and artifact checks.
-tags: [okf, skill, authoring, installation, assessment, references]
-timestamp: 2026-10-10T21:10:00Z
+description: Install and maintain the portable okf-authoring skill for selective agent consumption, document representation, safe parallel updates, and distinct structural checks.
+tags: [okf, skill, authoring, consumption, parallel-work, assessment, references]
+timestamp: 2026-10-14T18:47:58.306Z
 ---
 
 # Portable OKF authoring skill
 
-The `skills/okf-authoring/` directory is a portable methodology package: `SKILL.md` teaches discovery, evidence-backed relationships, profiles, document formatting, index coverage, log currency and distinct verification claims. `ASSESSMENT.md` assesses formatting/structure and applicable profile rules, **not substantive content correctness**. No QA companion or additional governance is introduced.
+The `skills/okf-authoring/` directory is a portable methodology package: `SKILL.md` teaches bounded **consumption** of indexed documentation for agent tasks, evidence-backed relationships, profiles, formatting, index/log maintenance, **parallel change convergence**, and distinct verification claims. `ASSESSMENT.md` assesses formatting/structure, retrieval method and applicable profile rules, **not substantive content correctness**. No QA companion or additional governance is introduced.
+
+## Use for independent and parallel work
+
+Agents should first verify the scan root, search selectively by topic/type/tags, inspect a bounded graph neighborhood, and read the authoritative source documents. Then they compare intended behavior with current code/tests, and pass relevant source paths, shared contracts, open questions and verification expectations to independent implementers. Neither a graph edge nor a successful format validator proves the implementation satisfies the user.
+
+During parallel work, content authors own their document edits. Agree on relationship names before dependent changes; assign a coordinating/integrating owner for shared `index.md`, `log.md` and `.okf-profile.yaml` edits. Reconcile links, inventories and log entries against the integrated tree before reporting document/graph conformance. This does not impose any task graph, role, approval ceremony or new documentation class.
+
+## Upstream and local format versions
+
+The shipped [local OKF standard](/docs/okf-standard.md) and synchronized skill reference describe this repository's established **v0.1-based** conventions, not the whole upstream specification. The [upstream OKF v0.2 specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) adds optional provenance, verification and lifecycle metadata, permits a bundle-root `index.md` version declaration, and does not universally require `log.md` frontmatter.
+
+The current server's reserved-file validator still has stricter local rules (`index.md` without frontmatter and `log.md` with `type: Log`), and its graph resolver documents leading-slash links relative to the **scan root**, rather than the upstream spec's **bundle root**. Check actual server version/profile and link behavior instead of assuming full upstream v0.2 conformance or silently changing the target repository's files. This update changes the **skill guidance and eval fixtures**, not the server parser, validator or resolver.
 
 ## Install
 
@@ -38,7 +50,7 @@ The skill separately requires index completeness and current-date log entries, w
 
 ## Cases and checks
 
-`skills/okf-authoring/evals/cases.json` defines observable positive/negative expectations for profile mismatch, missing index entries, stale logs, nested bundles/native metadata, substantive-review negative space and offline portable use. These are eval inputs, **not claimed ablation results**. The actual invalid-profile incident (missing relationship, conflicting direction and null maximum) provides RED evidence; it is not a fabricated baseline run of this skill.
+`skills/okf-authoring/evals/cases.json` defines observable positive/negative expectations for profile mismatch, missing index entries, stale logs, nested bundles/native metadata, bounded consumption, parallel updates, v0.2/local compatibility, substantive-review negative space and offline portable use. These are eval inputs, **not claimed ablation results**. The actual invalid-profile incident (missing relationship, conflicting direction and null maximum) provides RED evidence; it is not a fabricated baseline run of this skill.
 
 The corpus envelope is `skill: "okf-authoring"`, `version: "1.0.0"`, `shape: 1`, and a `cases` array. Each case has a unique `id` and `name`, concrete `trap`, inline-response `prompt`, and nonempty string arrays `expectations` and `negative_expectations`. Incident lineage belongs in the trap prose, not an unsupported metadata key. Prompts require no filesystem or shell mutations; actual native skill loading needs separate central integration evidence.
 
@@ -46,4 +58,4 @@ The corpus envelope is `skill: "okf-authoring"`, `version: "1.0.0"`, `shape: 1`,
 go test -race ./cmd/okf-mcp -run 'TestOKFAuthoring' -count=1
 ```
 
-Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. The local strict checker deliberately enforces this package's selected published shape, not the central Loom loader's complete accepted language: that loader also normalizes legacy inputs. Tests pin this published package to version `1.0.0` separately; nonempty version metadata such as `2.0.0` is not malformed or an unsupported harness schema. No SemVer compatibility rule is inferred. Nine cases now include mixed-corpus discovery and require actual inline artifacts where requested; explanation alone cannot pass those artifact criteria. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.
+Repository tests check reference synchronization, native metadata, relocated direct references and actual validator blind spots. The local strict checker deliberately enforces this package's selected published shape, not the central Loom loader's complete accepted language: that loader also normalizes legacy inputs. Tests pin this published package to version `1.0.0` separately; nonempty version metadata such as `2.0.0` is not malformed or an unsupported harness schema. No SemVer compatibility rule is inferred. Twelve cases now include mixed-corpus discovery and require actual inline artifacts where requested; explanation alone cannot pass those artifact criteria. Skill retrieval and agent decision quality require separate behavioral evaluation; passing artifact tests does not claim those results.
