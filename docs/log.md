@@ -3,10 +3,14 @@ type: Log
 title: Documentation Change Log
 description: Chronological record of changes to the docs/ bundle for plattform-okf-mcp.
 tags: [changelog, log, okf, multi-bundle]
-timestamp: 2026-10-10T21:20:00Z
+timestamp: 2026-10-14T18:48:05.121Z
 ---
 
 # Directory Update Log
+
+## 2026-10-14
+
+**Update**: [Portable OKF Authoring Skill](/docs/okf-authoring.md), `skills/okf-authoring/SKILL.md`, `skills/okf-authoring/ASSESSMENT.md`, `skills/okf-authoring/evals/cases.json`, `cmd/okf-mcp/skill_authoring_test.go`, `docs/index.md` — Added bounded context consumption, shared-document integration guidance and three negative/positive eval specifications; distinguished local v0.1-based validation from upstream OKF v0.2 format rules. This is skill/documentation work, not a server behavior change or a claim of live eval success.
 
 ## 2026-10-10
 
